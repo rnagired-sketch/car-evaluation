@@ -1,8 +1,7 @@
 # Car Evaluation: a robust decision tree (AME 505, Group 12)
 
 Classifies cars from the [UCI Car Evaluation dataset](https://archive.ics.uci.edu/dataset/19/car+evaluation)
-as `unacc`, `acc`, `good` or `vgood`, following the group's project proposal and the decision-tree
-material of Lecture 3B: CART tree building, cost-complexity pruning, Gini purity, and a k-NN fallback.
+as `unacc`, `acc`, `good` or `vgood`, utilizing CART tree building, cost-complexity pruning, Gini purity, and a k-NN fallback.
 
 ## Repository layout
 
@@ -24,7 +23,7 @@ car-evaluation/
 └── .github/workflows/ci.yml  lint, type-check and test on Python 3.11 to 3.13
 ```
 
-The dependency only points one way: `car-eval-io` depends on `car-eval-core`, never the reverse.
+The dependency only points one way: `car-eval-io` depends on `car-eval-core`.
 The core package holds frozen dataclasses and pure functions. The io package turns YAML into those
 dataclasses with [cattrs](https://catt.rs), so each class's own validation (`__post_init__`) also
 checks every value read from a config file.
@@ -53,9 +52,6 @@ uv run car-eval explain --config configs/config.yaml --output outputs
 uv run car-eval show-config --config configs/config.yaml
 ```
 
-`python -m car_eval_io ...` is equivalent. The YAML file says *what* to do; the command line
-says *where*: which config file, where the data comes from and where results go. No path
-appears in the YAML file.
 
 | Command | What it does |
 | --- | --- |
@@ -78,7 +74,7 @@ Outputs, written to the `--output` folder:
 
 - `report.txt`: the console report.
 - `results.json`: every metric, in machine-readable form.
-- `model.json`: a readable recipe that rebuilds the trained tree deterministically. Nothing is pickled.
+- `model.json`: a readable recipe that rebuilds the trained tree deterministically.
 - `figures/*.png`: class balance, depth curve, pruning path, learning curve, confusion matrix, feature importance, and the tree.
 
 ## Configuration
@@ -142,20 +138,7 @@ uv run pytest -m "not slow"
 uv run ruff check && uv run ruff format --check && uv run pyright
 ```
 
-The core package has unit tests for every module, including property-style checks over all 1728
-possible cars: each explanation's conditions hold for its car, and the explained rating equals the
-prediction. The io package has tests for config parsing and error messages, cattrs round trips,
-sources (with a faked download), artifacts, reports, figures and the CLI.
-
 Code style follows [Writing Python like it's Rust](https://kobzol.github.io/rust/python/2023/05/20/writing-python-like-its-rust.html):
-
-- type hints everywhere, checked by pyright
-- frozen dataclasses instead of tuples and dicts
-- union types handled with `match` and `assert_never`
-- `NewType` for seeds and pruning strengths
-- named construction functions
-- typestate: a `CarEvaluator` only comes from `fit`, and a `CarDataset` only from `from_frame`
-- context managers for figures
 
 ## Google Colab
 
@@ -167,3 +150,31 @@ the same way `--data` and `--output` are on the command line.
 ## Data
 
 See [data/README.md](data/README.md). Car Evaluation dataset © M. Bohanec, CC BY 4.0.
+
+## References
+
+### Project and course material
+- Miranda, E., Hanna, P., & Nagireddy, R. (2026). *Project Proposal: Car Evaluation* (Group 12). AME 505: Machine Learning for Engineering Applications, University of Southern California.
+- Jin, Y. (2026). *Lecture 3A: Introduction to Machine Learning and Classification*. AME 505, University of Southern California.
+- Jin, Y. (2026). *Lecture 3B: K-Nearest Neighbor and Decision Tree*. AME 505, University of Southern California.
+- Jin, Y. (2026). *Machine Learning for Engineering Applications*. Course textbook.
+
+### Dataset and domain model
+- Bohanec, M. (1988). *Car Evaluation* [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5JP48 (CC BY 4.0)
+- Bohanec, M., & Rajkovič, V. (1988). Knowledge acquisition and explanation for multi-attribute decision making. *8th International Workshop on Expert Systems and their Applications*, Avignon, France, 59–78. The source of the PRICE and COMFORT concept hierarchy behind the `price` and `comfort` features.
+
+### Methods
+- Breiman, L., Friedman, J. H., Olshen, R. A., & Stone, C. J. (1984). *Classification and Regression Trees*. Wadsworth. CART tree building and minimal cost-complexity pruning.
+
+### Software
+- Pedregosa, F., et al. (2011). Scikit-learn: Machine learning in Python. *Journal of Machine Learning Research*, 12, 2825–2830.
+- Harris, C. R., et al. (2020). Array programming with NumPy. *Nature*, 585, 357–362. https://doi.org/10.1038/s41586-020-2649-2
+- McKinney, W. (2010). Data structures for statistical computing in Python. *Proceedings of the 9th Python in Science Conference*, 56–61. (pandas)
+- Hunter, J. D. (2007). Matplotlib: A 2D graphics environment. *Computing in Science & Engineering*, 9(3), 90–95. https://doi.org/10.1109/MCSE.2007.55
+- cattrs: https://catt.rs
+- PyYAML: https://pyyaml.org
+- uv: https://docs.astral.sh/uv/
+- pytest, Ruff and Pyright, for testing, linting and type checking.
+
+### Code style
+- Beránek, J. ("Kobzol") (2023, May 20). *Writing Python like it's Rust*. https://kobzol.github.io/rust/python/2023/05/20/writing-python-like-its-rust.html
