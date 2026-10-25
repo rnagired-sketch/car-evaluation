@@ -178,3 +178,7 @@ See [data/README.md](data/README.md). Car Evaluation dataset © M. Bohanec, CC B
 
 ### Code style
 - Beránek, J. ("Kobzol") (2023, May 20). *Writing Python like it's Rust*. https://kobzol.github.io/rust/python/2023/05/20/writing-python-like-its-rust.html
+
+### AI assistance
+- All code structured, revised, and acceptance tested by Rupin Nagireddy, Eduardo Miranda, and Pierre Hanna.
+- Supporting code and documentation were developed with the help of Claude (Anthropic) through Claude Code.
