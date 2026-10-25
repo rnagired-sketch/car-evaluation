@@ -1,0 +1,71 @@
+# Workspace root. It is not a package itself: it ties the two member projects
+# together under one lockfile and holds the shared developer tooling.
+[project]
+name = "car-evaluation"
+version = "0.1.0"
+description = "AME 505 Group 12: robust decision-tree classifier for the UCI Car Evaluation dataset"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["car-eval-core", "car-eval-io"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/car-eval-core", "packages/car-eval-io"]
+
+[tool.uv.sources]
+car-eval-core = { workspace = true }
+car-eval-io = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pandas-stubs>=3.0.5.260914",
+    "pyright>=1.1.390",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "types-pyyaml>=6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["packages/car-eval-core/tests", "packages/car-eval-io/tests"]
+# Both packages have a `tests` folder; importlib mode keeps their modules apart.
+addopts = ["--import-mode=importlib", "--strict-markers"]
+markers = ["slow: end-to-end runs that fit many models"]
+filterwarnings = ["error", "ignore::DeprecationWarning:joblib.*"]
+
+[tool.coverage.run]
+source = ["car_eval_core", "car_eval_io"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PT", "N"]
+ignore = [
+    "N803", # scikit-learn convention: capital X for feature matrices
+    "N806",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# Frozen value objects: safe to share as dataclass defaults.
+extend-immutable-calls = [
+    "car_eval_core.benchmarks.AdequacyTargets",
+    "car_eval_core.dataset.SplitFractions",
+    "car_eval_core.domain.CcpAlpha",
+    "car_eval_core.metrics.CvSettings",
+    "car_eval_core.pipeline.PipelineSettings",
+    "car_eval_core.tree.SearchGrid",
+    "car_eval_io.sources.UciDownload",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["car_eval_core", "car_eval_io"]
+
+[tool.pyright]
+include = ["packages"]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false

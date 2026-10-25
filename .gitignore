@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environments and tool caches
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Run outputs (regenerate with `uv run car-eval run --config ...`)
+outputs/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+.ipynb_checkpoints/
