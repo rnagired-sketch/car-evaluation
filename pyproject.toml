@@ -59,6 +59,7 @@ extend-immutable-calls = [
     "car_eval_core.pipeline.PipelineSettings",
     "car_eval_core.tree.SearchGrid",
     "car_eval_io.sources.UciDownload",
+    "car_eval_io.logging_setup.LogSettings",
 ]
 
 [tool.ruff.lint.isort]

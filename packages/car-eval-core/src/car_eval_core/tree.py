@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -16,6 +17,8 @@ from car_eval_core.dataset import DataSplits, Partition
 from car_eval_core.domain import CcpAlpha, Seed
 from car_eval_core.features import FeatureSet
 from car_eval_core.metrics import CvSettings, Scores
+
+logger = logging.getLogger(__name__)
 
 Criterion = Literal["gini", "entropy"]
 ClassWeight = Literal["balanced"] | None
@@ -111,10 +114,27 @@ class SearchResult:
     top_candidates: tuple[CandidateScore, ...]
 
 
+def _describe(params: TreeHyperparameters) -> str:
+    depth = "unlimited" if params.max_depth is None else params.max_depth
+    weight = params.class_weight or "none"
+    return (
+        f"{params.criterion}, max_depth {depth}, min_samples_split {params.min_samples_split}, "
+        f"min_samples_leaf {params.min_samples_leaf}, class_weight {weight}"
+    )
+
+
 def tune_tree(
     features: FeatureSet, train: Partition, grid: SearchGrid, cv: CvSettings, seed: Seed, top: int = 5
 ) -> SearchResult:
     """Tree-building phase: pick hyperparameters by cross-validated macro-F1 on the training split."""
+    folds = cv.n_splits * cv.n_repeats
+    logger.info(
+        "grid search on %s: %d candidates x %d folds = %d fits",
+        features.description,
+        grid.size,
+        folds,
+        grid.size * folds,
+    )
     search = GridSearchCV(
         DecisionTreeClassifier(random_state=seed),
         grid.as_param_grid(),
@@ -135,6 +155,12 @@ def tune_tree(
         for _, row in results.head(top).iterrows()
     )
     best = candidates[0]
+    logger.info(
+        "best CV macro-F1 %.3f +/- %.3f with %s",
+        best.macro_f1_mean,
+        best.macro_f1_std,
+        _describe(best.params),
+    )
     return SearchResult(
         spec=TreeSpec(features, TreeHyperparameters.from_search(search.best_params_)),
         cv_macro_f1_mean=best.macro_f1_mean,
@@ -162,6 +188,7 @@ def prune_on_validation(spec: TreeSpec, splits: DataSplits, seed: Seed) -> Pruni
     alphas = np.unique(np.clip(path.ccp_alphas, 0.0, None))
     if alphas.size > 1:
         alphas = alphas[:-1]  # the largest alpha prunes the tree down to its root
+    logger.info("pruning: scoring %d cost-complexity alphas on the validation split", alphas.size)
     pruned = [spec.with_alpha(CcpAlpha(float(a))) for a in alphas]
     trees = [s.fit(splits.train, seed) for s in pruned]
     f1 = np.array(
@@ -172,6 +199,14 @@ def prune_on_validation(spec: TreeSpec, splits: DataSplits, seed: Seed) -> Pruni
     )
     leaves = np.array([t.get_n_leaves() for t in trees])
     chosen = CcpAlpha(float(alphas[np.isclose(f1, f1.max())].max()))
+    index = int(np.flatnonzero(alphas == chosen)[0])
+    logger.info(
+        "pruning: chose ccp_alpha %.5f -> %d leaves (unpruned %d), validation macro-F1 %.3f",
+        chosen,
+        leaves[index],
+        leaves[0],
+        f1[index],
+    )
     return PruningResult(alphas, f1, leaves, chosen)
 
 

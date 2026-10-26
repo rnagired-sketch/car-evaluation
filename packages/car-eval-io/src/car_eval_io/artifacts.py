@@ -8,6 +8,7 @@ well under a second, and the recipe stays human-readable and safe to load.
 from __future__ import annotations
 
 import json
+import logging
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ from car_eval_core.pipeline import Misclassification, PipelineResult
 from car_eval_core.tree import TreeSpec
 from car_eval_io.converters import CONVERTER, describe_errors
 from car_eval_io.sources import DataSource
+
+logger = logging.getLogger(__name__)
 
 
 class ArtifactError(Exception):
@@ -164,6 +167,7 @@ def _finite(data: Any) -> Any:
 def write_json(path: Path, value: Any, as_type: Any = None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(to_json(value, as_type), encoding="utf-8")
+    logger.debug("wrote %s", path)
     return path
 
 

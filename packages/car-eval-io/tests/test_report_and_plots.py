@@ -69,7 +69,7 @@ class TestRunOutputs:
         _, _, _, text = finished_run
         for number in ("1.", "2.", "3-4.", "5.", "6.", "7.", "8.", "9.", "10."):
             assert f"\n{number} " in text
-        assert text.startswith("... splitting data")
+        assert text.startswith(f"\n{report.RULE}\n1. ")  # the report alone: progress goes to logging
         assert "\nprofile: default\n" in text
 
     def test_requested_cars_are_explained(

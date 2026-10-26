@@ -62,6 +62,16 @@ def test_backend_does_no_console_or_file_io(path: Path) -> None:
     assert not called_names(path) & {"print", "open", "input"}
 
 
+@pytest.mark.parametrize("path", CORE_SOURCES, ids=lambda p: p.name)
+def test_backend_logs_but_never_configures_logging(path: Path) -> None:
+    calls = {
+        node.func.attr
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    assert not calls & {"basicConfig", "addHandler", "setLevel", "captureWarnings", "dictConfig"}
+
+
 @pytest.mark.parametrize("module", sorted(IO_MODULES_USING_BACKEND))
 def test_application_layer_builds_on_backend_classes(module: str) -> None:
     imports = imported_modules(IO / "src" / "car_eval_io" / f"{module}.py")
@@ -72,6 +82,7 @@ def test_entry_point_reaches_the_backend_only_through_the_application_layer() ->
     imports = imported_modules(IO / "src" / "car_eval_io" / "__main__.py")
     assert not any(name.startswith("car_eval_core") for name in imports)
     assert {"car_eval_io", "car_eval_io.config", "car_eval_io.paths", "car_eval_io.sources"} <= imports
+    assert "car_eval_io.logging_setup" in imports
 
 
 def test_declared_dependencies_point_one_way() -> None:

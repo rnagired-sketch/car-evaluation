@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import io
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import matplotlib
@@ -38,6 +39,20 @@ cars:
   - {buying: low, maint: low, doors: 4, persons: 4, lug_boot: big, safety: high}
   - {buying: low, maint: low, doors: 4, persons: 2, lug_boot: big, safety: high}
 """
+
+
+@pytest.fixture(autouse=True)
+def reset_logging() -> Iterator[None]:
+    """`car-eval` installs global logging handlers; undo them after every test."""
+    yield
+    root = logging.getLogger()
+    for handler in [h for h in root.handlers if getattr(h, "_car_eval_handler", False)]:
+        root.removeHandler(handler)
+        handler.close()
+    root.setLevel(logging.WARNING)
+    for name in ("car_eval_core", "car_eval_io"):
+        logging.getLogger(name).setLevel(logging.NOTSET)
+    logging.captureWarnings(False)
 
 
 @pytest.fixture(scope="session")

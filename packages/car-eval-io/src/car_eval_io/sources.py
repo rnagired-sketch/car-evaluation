@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import urllib.request
 import zipfile
 from dataclasses import dataclass
@@ -12,6 +13,8 @@ from typing import Any, Final, assert_never
 import pandas as pd
 
 from car_eval_core.dataset import COLUMN_NAMES
+
+logger = logging.getLogger(__name__)
 
 UCI_ZIP_URL: Final = "https://archive.ics.uci.edu/static/public/19/car+evaluation.zip"
 
@@ -50,6 +53,7 @@ def read_raw(source: DataSource) -> pd.DataFrame:
                 raise FileNotFoundError(f"data file not found: {path}")
             return pd.read_csv(path, **_READ_OPTIONS)
         case UciDownload(url, member, timeout):
+            logger.info("downloading %s (timeout %.0f s)", url, timeout)
             with urllib.request.urlopen(url, timeout=timeout) as response:
                 archive = zipfile.ZipFile(io.BytesIO(response.read()))
             with archive.open(member) as handle:

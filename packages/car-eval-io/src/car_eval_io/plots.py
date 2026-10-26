@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,6 +21,8 @@ from car_eval_core.domain import CLASS_LABELS, Acceptability
 from car_eval_core.evaluator import CarEvaluator, Importances
 from car_eval_core.pipeline import PipelineResult
 from car_eval_core.tree import PruningResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -42,6 +45,7 @@ class FigureSink:
                 path = self.directory / f"{name}.png"
                 fig.savefig(path, dpi=150)
                 self.saved.append(path)
+                logger.debug("saved figure %s", path)
             if self.show:
                 plt.show()
         finally:

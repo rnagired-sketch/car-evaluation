@@ -15,6 +15,10 @@ figures:
   save: true                # write PNGs to <output>/figures
   show: false               # display inline (notebooks)
 
+logging:                    # progress and errors, on the terminal (standard error)
+  level: info               # debug | info | warning | error
+  save: true                # also append them to <output>/car-eval.log
+
 pipeline:
   seed: 42
   fractions:                # proposal Evaluation Plan: 50 / 20 / 30

@@ -10,6 +10,7 @@ from car_eval_core.features import FeatureSet
 from car_eval_core.metrics import CvSettings
 from car_eval_core.pipeline import PipelineSettings
 from car_eval_io.config import ConfigError, FigureSettings, load_config, merge, parse_config
+from car_eval_io.logging_setup import LogLevel, LogSettings
 
 HERE = Path("/project/configs/run.yaml")
 
@@ -180,6 +181,23 @@ class TestStructure:
             "cars: [{buying: low, maint: low, doors: 2, persons: 4, lug_boot: big, safety: high}]", HERE
         )
         assert config.cars == (Car("low", "low", "2", "4", "big", "high"),)
+
+
+class TestLoggingSettings:
+    def test_default(self) -> None:
+        assert parse_config("", HERE).logging == LogSettings(LogLevel.INFO, save=True)
+
+    def test_from_yaml(self) -> None:
+        config = parse_config("logging: {level: debug, save: false}", HERE)
+        assert config.logging == LogSettings(LogLevel.DEBUG, save=False)
+
+    def test_shipped_config_logs_info_to_a_file(self, configs_dir: Path) -> None:
+        assert load_config(configs_dir / "config.yaml").logging == LogSettings(LogLevel.INFO, save=True)
+
+    def test_unknown_level_is_reported(self) -> None:
+        (message,) = problems("logging: {level: verbose}")
+        assert "verbose" in message
+        assert "$.logging.level" in message
 
 
 class TestErrors:

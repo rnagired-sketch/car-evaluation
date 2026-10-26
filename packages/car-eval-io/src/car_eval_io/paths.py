@@ -33,5 +33,9 @@ class RunPaths:
         return self.output / "explanations.json"
 
     @property
+    def log(self) -> Path:
+        return self.output / "car-eval.log"
+
+    @property
     def figures(self) -> Path:
         return self.output / "figures"

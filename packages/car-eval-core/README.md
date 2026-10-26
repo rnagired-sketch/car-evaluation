@@ -15,6 +15,7 @@ reads files, prints, or plots. `car-eval-io` does that and calls into this packa
 | `diagnostics` | Depth validation curve, learning curve, confusion matrix |
 | `stability` | Re-split the data many times to measure tree instability against rev0 |
 | `pipeline` | `PipelineSettings` and `run_pipeline`, which runs all of the above |
+| `logs` | `Stage` and `logged_stage`: numbered, timed progress messages. The backend only emits log records; `car-eval-io` decides where they go |
 
 ```python
 from car_eval_core.dataset import CarDataset

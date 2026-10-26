@@ -1,7 +1,7 @@
 """The YAML configuration file: what a run does.
 
-The file holds every modelling input: pipeline settings, figure options and the cars to
-explain. Where the data comes from and where results go are not part of it; those paths
+The file holds every modelling input: pipeline settings, figure and logging options and the
+cars to explain. Where the data comes from and where results go are not part of it; those paths
 come from the command line (see `car_eval_io.paths`).
 
 One file holds the base settings plus named `profiles`. The top-level `profile` key picks
@@ -21,6 +21,7 @@ import yaml
 from car_eval_core.domain import Car
 from car_eval_core.pipeline import PipelineSettings
 from car_eval_io.converters import CONVERTER, describe_errors
+from car_eval_io.logging_setup import LogSettings
 
 DEFAULT_PROFILE: Final = "default"
 PROFILE_KEY: Final = "profile"
@@ -48,6 +49,7 @@ class FigureSettings:
 class AppConfig:
     profile: str = DEFAULT_PROFILE  # the profile these settings were resolved for
     figures: FigureSettings = FigureSettings()
+    logging: LogSettings = LogSettings()
     pipeline: PipelineSettings = PipelineSettings()
     cars: tuple[Car, ...] = ()  # cars to rate and explain, by `run` and by `explain`
 

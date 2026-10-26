@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
+import re
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import pytest
@@ -19,9 +22,15 @@ def settings(tiny_grid: SearchGrid, fast_cv: CvSettings) -> PipelineSettings:
 
 
 @pytest.fixture(scope="module")
-def run(dataset: CarDataset, settings: PipelineSettings) -> tuple[PipelineResult, list[str]]:
-    messages: list[str] = []
-    return run_pipeline(dataset, settings, progress=messages.append), messages
+def run(
+    dataset: CarDataset, settings: PipelineSettings, record_logs: Callable[..., Any]
+) -> tuple[PipelineResult, list[str]]:
+    with record_logs() as logs:
+        result = run_pipeline(dataset, settings)
+    return result, logs.messages()
+
+
+STAGE = re.compile(r"^\[(\d+)/(\d+)\] (.+?)( \.\.\.| done in \d+\.\d s)$")
 
 
 class TestSettings:
@@ -44,13 +53,41 @@ class TestSettings:
         with pytest.raises(ValueError, match=message):
             dataclasses.replace(PipelineSettings(), **change)
 
+    @pytest.mark.parametrize(
+        ("change", "stages"),
+        [
+            ({}, 7),
+            ({"compare_benchmarks": False}, 6),
+            ({"stability_seeds": 0}, 6),
+            ({"feature_sets": (FeatureSet.RAW,), "compare_benchmarks": False, "stability_seeds": 0}, 4),
+        ],
+    )
+    def test_stage_count(self, change: dict[str, object], stages: int) -> None:
+        assert dataclasses.replace(PipelineSettings(), **change).stage_count() == stages
+
 
 @pytest.mark.slow
 class TestRunPipeline:
-    def test_reports_progress(self, run: tuple[PipelineResult, list[str]]) -> None:
+    def test_logs_every_stage_start_and_finish_in_order(
+        self, run: tuple[PipelineResult, list[str]], settings: PipelineSettings
+    ) -> None:
         _, messages = run
-        assert messages[0] == "splitting data"
-        assert any("stability" in m for m in messages)
+        stages = [match.groups() for m in messages if (match := STAGE.match(m))]
+        total = settings.stage_count()
+        assert len(stages) == 2 * total
+        assert [int(number) for number, *_ in stages] == [n for n in range(1, total + 1) for _ in (0, 1)]
+        assert {int(t) for _, t, *_ in stages} == {total}
+        assert stages[0][2].startswith("splitting data")
+        assert stages[-1][2].startswith("stability study over 2 random splits")
+
+    def test_logs_scores_and_selection(self, run: tuple[PipelineResult, list[str]]) -> None:
+        _, messages = run
+        assert messages[0].startswith("starting the evaluation plan")
+        assert messages[-1].startswith("evaluation plan finished in")
+        assert any(m.startswith("selected on validation: ") for m in messages)
+        assert any(m.startswith("test macro-F1 ") for m in messages)
+        assert any(m.startswith("grid search on ") for m in messages)
+        assert any(re.match(r"\s+split 2/2 \(seed 43\)", m) for m in messages)
 
     def test_develops_one_tree_per_feature_set(self, run: tuple[PipelineResult, list[str]]) -> None:
         result, _ = run

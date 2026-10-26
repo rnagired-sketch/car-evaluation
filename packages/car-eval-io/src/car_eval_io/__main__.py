@@ -6,20 +6,24 @@
     uv run car-eval show-config --config configs/config.yaml
 
 `python -m car_eval_io ...` is equivalent. The YAML file says what to do (profile, pipeline
-settings, figures, cars). The command line says which file that is and every filesystem
+settings, figures, logging, cars). The command line says which file that is and every filesystem
 location: where the data comes from and where results are written.
+
+Progress and errors are log messages on standard error (and in `<output>/car-eval.log`); the
+report itself goes to standard output. Argument mistakes are reported by argparse.
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
+import logging
 from collections.abc import Sequence
 from pathlib import Path
 
 from car_eval_io import app
 from car_eval_io.artifacts import ArtifactError
-from car_eval_io.config import ConfigError, load_config
+from car_eval_io.config import AppConfig, ConfigError, load_config
+from car_eval_io.logging_setup import LogLevel, configure_logging
 from car_eval_io.paths import RunPaths
 from car_eval_io.sources import DataSource, LocalFile, UciDownload
 
@@ -30,7 +34,9 @@ COMMANDS: dict[str, str] = {
 }
 DEFAULT_OUTPUT = Path("outputs")
 
-EXIT_OK, EXIT_FAILURE, EXIT_BAD_INPUT = 0, 1, 2
+EXIT_OK, EXIT_FAILURE, EXIT_BAD_INPUT, EXIT_INTERRUPTED = 0, 1, 2, 130
+
+logger = logging.getLogger("car_eval_io")
 
 
 def existing_file(text: str) -> Path:
@@ -109,30 +115,47 @@ def output_paths(parser: argparse.ArgumentParser, args: argparse.Namespace) -> R
         parser.error(str(error))  # exits with status 2, like every other argument error
 
 
+def log_file(config: AppConfig, paths: RunPaths | None) -> Path | None:
+    return paths.log if paths is not None and config.logging.save else None
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    configure_logging(LogLevel.INFO)  # until the config says otherwise
     try:
         config = load_config(args.config)
     except ConfigError as error:
-        print(error, file=sys.stderr)
+        logger.error("%s", error)
         return EXIT_BAD_INPUT
+
+    paths = output_paths(parser, args) if args.command in ("run", "explain") else None
+    configure_logging(config.logging.level, log_file(config, paths))
+    logger.debug("command %r with config %s", args.command, args.config)
 
     try:
         match args.command:
             case "run":
                 data = data_source(args)
-                if data is None:
-                    raise AssertionError("argparse requires --data or --download for `run`")
-                app.run(config, data, output_paths(parser, args))
+                if data is None or paths is None:
+                    raise AssertionError("argparse requires --data or --download and --output for `run`")
+                app.run(config, data, paths)
             case "explain":
-                app.explain(config, output_paths(parser, args), data_source(args))
+                if paths is None:
+                    raise AssertionError("`explain` always has an output folder")
+                app.explain(config, paths, data_source(args))
             case "show-config":
                 app.show_config(config)
             case other:
                 raise AssertionError(f"unhandled command {other!r}")
-    except (ArtifactError, FileNotFoundError, ValueError) as error:
-        print(f"error: {error}", file=sys.stderr)
+    except (ArtifactError, OSError, ValueError) as error:
+        logger.error("%s", error)
+        return EXIT_FAILURE
+    except KeyboardInterrupt:
+        logger.warning("interrupted; results written so far are kept")
+        return EXIT_INTERRUPTED
+    except Exception:
+        logger.exception("unexpected error; the traceback below shows where it happened")
         return EXIT_FAILURE
     return EXIT_OK
 

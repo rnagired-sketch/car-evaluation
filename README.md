@@ -135,7 +135,28 @@ Outputs, written to the `--output` folder:
 - `model.json`: a readable recipe that rebuilds the trained tree deterministically.
 - `figures/*.png`: class balance, depth curve, pruning path, learning curve, confusion matrix, feature importance, and the tree.
 
+- `car-eval.log`: every progress and error message, appended by each `run` and `explain`.
+
 Open them from the VS Code Explorer. `outputs/` is ignored by Git.
+
+### Progress and error messages
+
+While a command runs, it logs what it is doing to the terminal: numbered stages with their
+timings, the scores as they are computed, and every warning and error.
+
+```
+21:00:24 INFO    car_eval_core.pipeline: [2/7] building and pruning a tree on 6 raw attributes ...
+21:00:25 INFO    car_eval_core.tree: best CV macro-F1 0.888 +/- 0.055 with entropy, max_depth unlimited, ...
+21:00:25 INFO    car_eval_core.pipeline: [2/7] building and pruning a tree on 6 raw attributes done in 0.5 s
+21:00:35 INFO    car_eval_core.stability:   split 4/20 (seed 45): rev0 macro-F1 0.921, rev1 0.982
+21:01:18 ERROR   car_eval_io: cannot read model recipe outputs/model.json: No such file or directory. Run `car-eval run` first.
+```
+
+Log messages go to standard error and the report to standard output, so
+`uv run car-eval run ... > report.txt` saves the report alone while progress stays on screen.
+Set the amount of detail under `logging:` in `configs/config.yaml`: `level` is `debug`, `info`
+(default), `warning` or `error`, and `save: false` turns off `car-eval.log`. An unexpected error
+is logged with its full traceback.
 
 ### Troubleshooting
 
@@ -173,7 +194,8 @@ invalid configuration configs/mine.yaml:
   - buying='cheap'; expected one of ('low', 'med', 'high', 'vhigh') @ $.cars[0]
 ```
 
-Exit codes: `0` success, `1` runtime failure (for example, no `model.json` yet), `2` invalid
+Exit codes: `0` success, `1` runtime failure (for example, no `model.json` yet), `130`
+interrupted with `Ctrl+C`, `2` invalid
 configuration or command-line arguments.
 
 ## Method and findings

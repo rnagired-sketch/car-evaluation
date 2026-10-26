@@ -1,13 +1,15 @@
 """The commands behind the CLI.
 
 Each takes the loaded `AppConfig` (what to do), the paths given on the command line (where
-to read and write), and an optional text stream (standard output by default, looked up at
-call time so redirection works).
+to read and write), and an optional text stream for the report itself (standard output by
+default, looked up at call time so redirection works). Progress goes to logging.
 """
 
 from __future__ import annotations
 
+import logging
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
@@ -25,6 +27,8 @@ from car_eval_io.converters import CONVERTER
 from car_eval_io.paths import RunPaths
 from car_eval_io.sources import DataSource, describe, read_raw
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class RunOutcome:
@@ -34,16 +38,18 @@ class RunOutcome:
 
 
 def load_dataset(source: DataSource) -> tuple[CarDataset, ValidationReport]:
+    logger.info("loading data from %s", describe(source))
     return CarDataset.from_frame(read_raw(source))
 
 
 def run(config: AppConfig, data: DataSource, paths: RunPaths, out: TextIO | None = None) -> RunOutcome:
     """Full evaluation plan: report, figures, `results.json` and the `model.json` recipe."""
     out = out or sys.stdout
+    started = time.perf_counter()
+    logger.info("car-eval run: profile %r, writing to %s", config.profile, paths.output)
     dataset, validation = load_dataset(data)
-    result = run_pipeline(
-        dataset, config.pipeline, progress=lambda step: print(f"... {step}", file=out, flush=True)
-    )
+    result = run_pipeline(dataset, config.pipeline)
+    logger.info("explaining %d car(s) from the config", len(config.cars))
     explanations = tuple(result.evaluator.explain(car) for car in config.cars)
 
     text = report.render_run(config.profile, describe(data), validation, result, explanations)
@@ -64,11 +70,14 @@ def run(config: AppConfig, data: DataSource, paths: RunPaths, out: TextIO | None
         write_json(paths.model, recipe),
     ]
     if config.figures.save or config.figures.show:
+        logger.info("drawing figures (save=%s, show=%s)", config.figures.save, config.figures.show)
         sink = plots.FigureSink(paths.figures if config.figures.save else None, config.figures.show)
         counts = pd.Series({a.label: n for a, n in dataset.data.class_counts().items()})
         files += plots.all_figures(sink, counts, result)
 
-    print(f"\nwrote {len(files)} files to {paths.output}", file=out)
+    logger.info(
+        "wrote %d files to %s; finished in %.1f s", len(files), paths.output, time.perf_counter() - started
+    )
     return RunOutcome(result, explanations, tuple(files))
 
 
@@ -82,14 +91,16 @@ def explain(
     out = out or sys.stdout
     if not config.cars:
         raise ValueError("the config lists no cars to explain; add them under `cars:`")
+    logger.info("car-eval explain: %d car(s), model from %s", len(config.cars), paths.model)
     recipe = load_recipe(paths.model)
     dataset, _ = load_dataset(data if data is not None else recipe.data)
+    logger.info("rebuilding the %s tree from the recipe", recipe.spec.features.description)
     evaluator = recipe.rebuild(dataset)
     explanations = tuple(evaluator.explain(car) for car in config.cars)
     for explanation in explanations:
         print(report.render_explanation(explanation), file=out)
     path = write_json(paths.explanations, explanations, tuple[Explanation, ...])
-    print(f"\nwrote {path}", file=out)
+    logger.info("wrote %s", path)
     return explanations
 
 

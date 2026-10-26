@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -21,6 +22,8 @@ from car_eval_core.domain import Seed
 from car_eval_core.features import FeatureSet
 from car_eval_core.metrics import CvSettings, Scores
 from car_eval_core.tree import DevelopedTree
+
+logger = logging.getLogger(__name__)
 
 REV0_GRID: Final[dict[str, list[object]]] = {
     "max_depth": [4, 6, 8, 10, None],
@@ -74,9 +77,12 @@ def compare_models(
     if not candidates:
         raise ValueError("compare_models needs at least one developed tree")
     best_features = max(candidates.values(), key=lambda d: d.validation.macro_f1).spec.features
+    logger.info("fitting the majority baseline, the rev0 tree and k-NN on the training split")
     baseline = fit_majority_baseline(splits.train)
     rev0 = fit_rev0_tree(splits.train, seed)
+    logger.debug("rev0 tree: %d leaves, depth %d", rev0.get_n_leaves(), rev0.get_depth())
     knn = fit_knn(best_features, splits.train, cv, seed)
+    logger.debug("k-NN: %s", knn.named_steps["knn"].get_params())
 
     predictors: dict[str, Callable[[pd.DataFrame], np.ndarray]] = {
         "majority baseline": lambda X: np.asarray(baseline.predict(X)),
@@ -91,11 +97,15 @@ def compare_models(
         ("validation", splits.validation),
         ("test", splits.test),
     )
-    return tuple(
+    rows = tuple(
         ComparisonRow(name, split_name, Scores.of(part.y, predict(part.X)))
         for name, predict in predictors.items()
         for split_name, part in scored
     )
+    for row in rows:
+        if row.split == "validation":
+            logger.info("  %-28s validation macro-F1 %.3f", row.model, row.scores.macro_f1)
+    return rows
 
 
 @dataclass(frozen=True)

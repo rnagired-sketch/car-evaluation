@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import itertools
-from collections.abc import Callable, Sequence
+import logging
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -82,6 +84,44 @@ def evaluator(concept_spec: TreeSpec, splits: DataSplits) -> CarEvaluator:
 def all_cars() -> list[Car]:
     """Every one of the 4*4*4*3*3*3 = 1728 attribute combinations."""
     return [Car(*levels) for levels in itertools.product(*(f.levels for f in FEATURES))]
+
+
+class RecordList(logging.Handler):
+    """Collects log records; usable from fixtures of any scope, unlike pytest's caplog."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+    def messages(self, logger: str = "car_eval_core") -> list[str]:
+        return [r.getMessage() for r in self.records if r.name.startswith(logger)]
+
+
+@contextlib.contextmanager
+def recorded_logs(level: int = logging.INFO) -> Iterator[RecordList]:
+    """Capture everything the backend logs at `level` and above while the block runs."""
+    logger = logging.getLogger("car_eval_core")
+    handler, previous = RecordList(), logger.level
+    handler.setLevel(level)
+    logger.addHandler(handler)
+    logger.setLevel(level)
+    try:
+        yield handler
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous)
+
+
+RecordLogs = Callable[..., contextlib.AbstractContextManager[RecordList]]
+
+
+@pytest.fixture(scope="session")
+def record_logs() -> RecordLogs:
+    """`with record_logs() as logs: ...` captures backend log records (any fixture scope)."""
+    return recorded_logs
 
 
 RawRow = Sequence[str | None]

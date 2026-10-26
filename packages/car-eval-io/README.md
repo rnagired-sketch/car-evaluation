@@ -8,6 +8,7 @@ itself lives in `car-eval-core`.
 | --- | --- |
 | `__main__` | argparse entry point (`car-eval` script, or `python -m car_eval_io`); owns every path: `--config`, `--data` / `--download`, `--output` |
 | `paths` | `RunPaths`: the files a command writes under its `--output` folder |
+| `logging_setup` | Log handlers: timestamped lines on standard error plus `<output>/car-eval.log`; level from the config |
 | `app` | The commands: `run`, `explain`, `show-config` |
 | `config` | The YAML configuration schema (`AppConfig`: profile, figures, pipeline, cars; no paths) and loader with profile merging |
 | `converters` | The cattrs converter: builds core objects from YAML/JSON and turns results back into data |
@@ -22,7 +23,10 @@ uv run car-eval explain --config configs/config.yaml --output outputs
 uv run car-eval show-config --config configs/config.yaml
 ```
 
-Exit codes: `0` success, `1` runtime failure (no saved model, data that does not match it, …),
+Progress and errors are log messages (standard error and `car-eval.log`); the report itself
+goes to standard output.
+
+Exit codes: `0` success, `130` interrupted, `1` runtime failure (no saved model, data that does not match it, …),
 `2` invalid configuration or command-line arguments (including a `--data` file that does not exist).
 
 Tests: `uv run pytest packages/car-eval-io` from the repository root.

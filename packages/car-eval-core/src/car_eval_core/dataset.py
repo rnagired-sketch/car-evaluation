@@ -6,6 +6,7 @@ so every later stage can rely on clean, encoded data.
 
 from __future__ import annotations
 
+import logging
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -16,6 +17,8 @@ from sklearn.model_selection import train_test_split
 
 from car_eval_core.domain import CLASS_LABELS, Acceptability, Seed
 from car_eval_core.features import FEATURE_NAMES, FEATURES
+
+logger = logging.getLogger(__name__)
 
 TARGET: Final = "class"
 COLUMN_NAMES: Final[tuple[str, ...]] = (*FEATURE_NAMES, TARGET)
@@ -85,11 +88,6 @@ class CarDataset:
         valid = valid[~exact_duplicates]
         conflicting = valid.duplicated(subset=list(FEATURE_NAMES), keep=False)
         valid = valid[~conflicting]
-        if valid.empty:
-            raise ValueError("no valid rows left after cleaning")
-
-        X = pd.DataFrame({f.name: valid[f.name].map(f.ranks).astype(int) for f in FEATURES})
-        y = valid[TARGET].map(lambda label: int(Acceptability.from_label(str(label)))).astype(int)
         report = ValidationReport(
             rows_read=len(raw),
             rows_with_missing_values=int(missing.sum()),
@@ -98,11 +96,33 @@ class CarDataset:
             conflicting_rows_removed=int(conflicting.sum()),
             rows_kept=len(valid),
         )
+        _log_report(report)
+        if valid.empty:
+            raise ValueError("no valid rows left after cleaning")
+
+        X = pd.DataFrame({f.name: valid[f.name].map(f.ranks).astype(int) for f in FEATURES})
+        y = valid[TARGET].map(lambda label: int(Acceptability.from_label(str(label)))).astype(int)
         data = Partition(X.reset_index(drop=True), y.rename(TARGET).reset_index(drop=True))
         return CarDataset(data), report
 
     def __len__(self) -> int:
         return len(self.data)
+
+
+def _log_report(report: ValidationReport) -> None:
+    dropped = report.rows_read - report.rows_kept
+    if dropped:
+        logger.warning(
+            "dropped %d of %d rows: %d with missing values, %d with unknown levels, "
+            "%d exact duplicates, %d with conflicting labels",
+            dropped,
+            report.rows_read,
+            report.rows_with_missing_values,
+            report.rows_with_unknown_levels,
+            report.exact_duplicates_removed,
+            report.conflicting_rows_removed,
+        )
+    logger.info("validated %d rows, kept %d", report.rows_read, report.rows_kept)
 
 
 @dataclass(frozen=True)
@@ -131,6 +151,9 @@ class DataSplits:
         development, test = _stratified_split(dataset.data, fractions.test, seed)
         validation_share = fractions.validation / (fractions.train + fractions.validation)
         train, validation = _stratified_split(development, validation_share, seed)
+        logger.debug(
+            "seed %d split: %d train / %d validation / %d test", seed, len(train), len(validation), len(test)
+        )
         return DataSplits(train, validation, test)
 
     @property
