@@ -72,8 +72,13 @@ class TestParser:
     def test_run_with_download(self) -> None:
         assert data_source(parse("run", "-c", "c.yaml", "--download")) == UciDownload()
 
-    def test_output_defaults_to_outputs_in_the_working_directory(self) -> None:
-        assert parse("run", "-c", "c.yaml", "--download").output == DEFAULT_OUTPUT
+    def test_output_defaults_to_outputs_in_the_working_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        output = parse("run", "-c", "c.yaml", "--download").output
+        assert output == tmp_path.resolve() / DEFAULT_OUTPUT
+        assert output.is_absolute()
 
     def test_relative_paths_resolve_against_the_working_directory(
         self, car_data: Path, monkeypatch: pytest.MonkeyPatch

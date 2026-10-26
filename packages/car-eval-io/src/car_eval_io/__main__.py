@@ -61,7 +61,7 @@ def _add_output(command: argparse.ArgumentParser, help_text: str) -> None:
         "-o",
         "--output",
         type=folder,
-        default=DEFAULT_OUTPUT,
+        default=str(DEFAULT_OUTPUT),  # a string default goes through `type`, so it is resolved too
         metavar="DIR",
         help=f"{help_text} (default: %(default)s)",
     )

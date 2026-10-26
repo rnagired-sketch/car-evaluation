@@ -126,7 +126,10 @@ To try a faster run first, set `profile: quick` at the top of `configs/config.ya
 
 `run` needs exactly one of `--data` or `--download`. Without either, `explain` re-reads the
 source recorded in `model.json` and refuses data whose size differs from the training data.
-Relative paths are resolved against the current working directory.
+Relative paths are resolved against the folder the terminal is in, so run the commands from the
+repository root. The output folder is created as soon as `run` starts, and the first log lines
+print its full path (`results folder: /.../car-evaluation/outputs`); the last ones list every file
+written.
 
 Outputs, written to the `--output` folder:
 

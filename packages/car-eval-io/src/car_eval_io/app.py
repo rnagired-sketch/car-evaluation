@@ -46,7 +46,8 @@ def run(config: AppConfig, data: DataSource, paths: RunPaths, out: TextIO | None
     """Full evaluation plan: report, figures, `results.json` and the `model.json` recipe."""
     out = out or sys.stdout
     started = time.perf_counter()
-    logger.info("car-eval run: profile %r, writing to %s", config.profile, paths.output)
+    logger.info("car-eval run: profile %r", config.profile)
+    logger.info("results folder: %s", paths.create())
     dataset, validation = load_dataset(data)
     result = run_pipeline(dataset, config.pipeline)
     logger.info("explaining %d car(s) from the config", len(config.cars))
@@ -55,7 +56,7 @@ def run(config: AppConfig, data: DataSource, paths: RunPaths, out: TextIO | None
     text = report.render_run(config.profile, describe(data), validation, result, explanations)
     print(text, file=out)
 
-    paths.output.mkdir(parents=True, exist_ok=True)
+    paths.create()  # again, in case it was removed while the pipeline ran
     paths.report.write_text(text + "\n", encoding="utf-8")
     recipe = ModelRecipe(
         data=data,
@@ -75,6 +76,8 @@ def run(config: AppConfig, data: DataSource, paths: RunPaths, out: TextIO | None
         counts = pd.Series({a.label: n for a, n in dataset.data.class_counts().items()})
         files += plots.all_figures(sink, counts, result)
 
+    for path in files:
+        logger.info("  wrote %s", path.relative_to(paths.output))
     logger.info(
         "wrote %d files to %s; finished in %.1f s", len(files), paths.output, time.perf_counter() - started
     )
