@@ -28,30 +28,88 @@ The core package holds frozen dataclasses and pure functions. The io package tur
 dataclasses with [cattrs](https://catt.rs), so each class's own validation (`__post_init__`) also
 checks every value read from a config file.
 
-## Quick start
+## Getting started (VS Code, Windows PowerShell or macOS Terminal)
 
-Requires [uv](https://docs.astral.sh/uv/).
+The commands below are the same in Windows PowerShell and the macOS Terminal unless a step says
+otherwise. Forward slashes in paths work on Windows too.
+
+### 1. Install the prerequisites
+
+You need Git, VS Code and uv. Python itself is optional: uv downloads Python 3.12 if it isn't installed.
+
+| Tool | Windows (PowerShell) | macOS (Terminal) |
+| --- | --- | --- |
+| Git | `winget install --id Git.Git -e` | `xcode-select --install` |
+| VS Code | `winget install --id Microsoft.VisualStudioCode -e` | Download from [code.visualstudio.com](https://code.visualstudio.com), or `brew install --cask visual-studio-code` |
+| uv | `winget install --id astral-sh.uv -e` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+
+After installing:
+
+1. Close and reopen the terminal so it picks up the new `PATH`.
+2. Check each tool: `git --version`, `code --version`, `uv --version`.
+3. In VS Code, open the Extensions view (`Ctrl+Shift+X` on Windows, `Cmd+Shift+X` on Mac) and
+   install **Python** by Microsoft.
+
+On a Mac, if `code` is not found, open VS Code, press `Cmd+Shift+P` and run
+**Shell Command: Install 'code' command in PATH**. If `uv` is not found, see
+[Troubleshooting](#troubleshooting). Other install options are in the
+[uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+
+### 2. Clone the repository and open it in VS Code
 
 ```bash
-git clone https://github.com/rnagired-sketch/car-evaluation.git && cd car-evaluation
+git clone https://github.com/rnagired-sketch/car-evaluation.git
 ```
+
+```bash
+code car-evaluation
+```
+
+Or use **File > Open Folder...** and choose `car-evaluation`. Open the repository root, never one
+of the `packages` subfolders: uv and VS Code read the root `pyproject.toml` to find both packages.
+When VS Code asks whether you trust the authors, choose **Yes, I trust the authors**.
+
+Open the integrated terminal with **Terminal > New Terminal** (`` Ctrl+` `` on both systems). It
+starts in the repository root; run every command below from there. If you already have a clone,
+update it first with `git pull origin main`.
+
+### 3. Set up the environment
 
 ```bash
 uv sync --all-packages
 ```
 
+This creates `.venv` with Python and every dependency, pinned by `uv.lock`. Run it again after a
+`git pull` that changes `uv.lock` or a `pyproject.toml`. You never need to activate `.venv`;
+`uv run` uses it automatically.
+
+Then point VS Code at it: press `Ctrl+Shift+P` (Windows) or `Cmd+Shift+P` (Mac), run
+**Python: Select Interpreter** and choose the `.venv` entry. If it isn't listed, choose
+**Enter interpreter path...** and give `.venv\Scripts\python.exe` (Windows) or `.venv/bin/python` (Mac).
+
+### 4. Run the application
+
+Run the full evaluation (about 2–3 minutes):
+
 ```bash
 uv run car-eval run --config configs/config.yaml --data data/car.data --output outputs
 ```
+
+Rate and explain the cars listed in the config, using the model the run saved:
 
 ```bash
 uv run car-eval explain --config configs/config.yaml --output outputs
 ```
 
+Print the settings in effect, with every default filled in:
+
 ```bash
 uv run car-eval show-config --config configs/config.yaml
 ```
 
+`uv run python -m car_eval_io ...` is equivalent. Add `--help` after any command to list its options.
+To try a faster run first, set `profile: quick` at the top of `configs/config.yaml` (see
+[Configuration](#configuration)).
 
 | Command | What it does |
 | --- | --- |
@@ -76,6 +134,22 @@ Outputs, written to the `--output` folder:
 - `results.json`: every metric, in machine-readable form.
 - `model.json`: a readable recipe that rebuilds the trained tree deterministically.
 - `figures/*.png`: class balance, depth curve, pruning path, learning curve, confusion matrix, feature importance, and the tree.
+
+Open them from the VS Code Explorer. `outputs/` is ignored by Git.
+
+### Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| `uv` is not recognized (Windows) or `command not found: uv` (Mac) | Close and reopen the terminal, and restart VS Code if you use its terminal. On a Mac, `source $HOME/.local/bin/env` fixes the current window; if new windows still fail, run `echo 'source $HOME/.local/bin/env' >> ~/.zshrc` once. |
+| `car-eval` not found, or `ModuleNotFoundError: car_eval_core` | Run `uv sync --all-packages` from the repository root. |
+| VS Code underlines the `car_eval_core` / `car_eval_io` imports | Select the `.venv` interpreter (step 3). |
+| `one of the arguments -d/--data --download is required` | `run` needs `--data data/car.data` or `--download`. |
+| `no such file: data/car.data` | The terminal is not in the repository root: `cd car-evaluation`, or give the full path. |
+| `cannot read model recipe ... Run car-eval run first` | `explain` reads `model.json` from `--output`; run `run` first with the same `--output`. |
+| `invalid configuration ...` | Each line names a bad key and where it is (for example `@ $.pipeline`); fix it in `configs/config.yaml`. |
+| `uv sync` fails with *Access is denied* (Windows) | Close other terminals or programs using `.venv` and rerun. Keeping the repository outside OneDrive avoids sync locks. |
+| No figures appear | They are saved to `outputs/figures`, not shown. The `quick` profile saves none. |
 
 ## Configuration
 
@@ -135,7 +209,15 @@ uv run pytest -m "not slow"
 ```
 
 ```bash
-uv run ruff check && uv run ruff format --check && uv run pyright
+uv run ruff check
+```
+
+```bash
+uv run ruff format --check
+```
+
+```bash
+uv run pyright
 ```
 
 Code style follows [Writing Python like it's Rust](https://kobzol.github.io/rust/python/2023/05/20/writing-python-like-its-rust.html):
