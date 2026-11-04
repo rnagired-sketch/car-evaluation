@@ -34,11 +34,6 @@ pipeline:
   cv:                       # repeated stratified k-fold on the training split
     n_splits: 5
     n_repeats: 3
-  adequacy:                 # below either target, the proposal falls back to k-NN
-    min_macro_f1: 0.90
-    max_false_acceptance: 0.05
-  feature_sets: [raw, with_concepts]   # each is tuned; the validation split picks one
-  compare_benchmarks: true             # majority baseline, rev0 recipe, k-NN
   stability_seeds: 20                  # re-split this many times; 0 skips the study
   permutation_repeats: 20
 
@@ -53,7 +48,7 @@ cars:
 profiles:
   # `default` needs no entry: it is the base settings above, unchanged.
 
-  quick:                    # fast smoke run, well under a minute
+  quick:                    # fast smoke run, about 10 seconds
     figures:
       save: false
     pipeline:

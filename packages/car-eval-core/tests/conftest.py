@@ -14,7 +14,7 @@ import pytest
 from car_eval_core.dataset import COLUMN_NAMES, CarDataset, DataSplits, SplitFractions
 from car_eval_core.domain import Car, Seed
 from car_eval_core.evaluator import CarEvaluator
-from car_eval_core.features import FEATURES, FeatureSet
+from car_eval_core.features import FEATURES
 from car_eval_core.metrics import CvSettings
 from car_eval_core.tree import SearchGrid, TreeHyperparameters, TreeSpec
 
@@ -72,7 +72,7 @@ def full_tree_params() -> TreeHyperparameters:
 
 @pytest.fixture(scope="session")
 def concept_spec(full_tree_params: TreeHyperparameters) -> TreeSpec:
-    return TreeSpec(FeatureSet.WITH_CONCEPTS, full_tree_params)
+    return TreeSpec(full_tree_params)
 
 
 @pytest.fixture(scope="session")

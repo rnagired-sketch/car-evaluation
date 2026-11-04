@@ -6,11 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from car_eval_core.benchmarks import ComparisonRow
 from car_eval_core.domain import Acceptability, Car
 from car_eval_core.evaluator import Explanation
 from car_eval_core.features import CONCEPT_BY_NAME, FEATURE_BY_NAME, LevelCondition, ScoreCondition
-from car_eval_core.metrics import Scores
 from car_eval_io import app, plots, report
 from car_eval_io.config import AppConfig
 from car_eval_io.paths import RunPaths
@@ -53,21 +51,13 @@ class TestDescriptions:
         explanation = Explanation(CAR, Acceptability.UNACC, 0.5, counts, ())
         assert "(root is a leaf)" in report.render_explanation(explanation)
 
-    def test_comparison_table_is_indexed_by_split_and_model(self) -> None:
-        scores = Scores(1.0, 1.0, 1.0, 0.0, 0.0, 0)
-        table = report.comparison_table(
-            [ComparisonRow("m", "test", scores), ComparisonRow("m", "validation", scores)]
-        )
-        assert list(table.index) == [("test", "m"), ("validation", "m")]
-        assert "macro_f1" in table.columns
-
 
 class TestRunOutputs:
     def test_console_report_has_every_section(
         self, finished_run: tuple[AppConfig, RunPaths, app.RunOutcome, str]
     ) -> None:
         _, _, _, text = finished_run
-        for number in ("1.", "2.", "3-4.", "5.", "6.", "7.", "8.", "9.", "10."):
+        for number in ("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8."):
             assert f"\n{number} " in text
         assert text.startswith(f"\n{report.RULE}\n1. ")  # the report alone: progress goes to logging
         assert "\nprofile: default\n" in text
@@ -93,8 +83,9 @@ class TestRunOutputs:
         data = json.loads(paths.results.read_text(), parse_constant=pytest.fail)
         assert data["validation_report"]["rows_kept"] == 1728
         assert data["split_counts"]["test"]["unacc"] == 363
-        assert data["chosen"]["features"] == "with_concepts"
-        assert data["adequacy"]["passes"] is True
+        assert data["tree"]["spec"]["params"]["criterion"] == "entropy"
+        assert data["tree"]["validation"]["macro_f1"] >= 0.97
+        assert data["stability"]["macro_f1"]["mean"] >= 0.9
         assert data["test_scores"]["macro_f1"] == pytest.approx(outcome.result.test_scores.macro_f1)
         assert data["stability"]["splits"] == 2
         assert data["explanations"][0]["rating"] == outcome.explanations[0].rating.label

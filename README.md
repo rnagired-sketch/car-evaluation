@@ -1,7 +1,8 @@
 # Car Evaluation: a robust decision tree (AME 505, Group 12)
 
 Classifies cars from the [UCI Car Evaluation dataset](https://archive.ics.uci.edu/dataset/19/car+evaluation)
-as `unacc`, `acc`, `good` or `vgood`, utilizing CART tree building, cost-complexity pruning, Gini purity, and a k-NN fallback.
+as `unacc`, `acc`, `good` or `vgood` with one decision tree, utilizing CART tree building,
+cost-complexity pruning, Gini purity and two expert-model concept features (*price* and *comfort*).
 
 ## Repository layout
 
@@ -89,7 +90,7 @@ Then point VS Code at it: press `Ctrl+Shift+P` (Windows) or `Cmd+Shift+P` (Mac),
 
 ### 4. Run the application
 
-Run the full evaluation (about 2–3 minutes):
+Run the full evaluation (under a minute):
 
 ```bash
 uv run car-eval run --config configs/config.yaml --data data/car.data --output outputs
@@ -113,7 +114,7 @@ To try a faster run first, set `profile: quick` at the top of `configs/config.ya
 
 | Command | What it does |
 | --- | --- |
-| `run` | Validate and split the data, build and prune a tree for each feature set, pick one on the validation split, compare it with the baseline / rev0 / k-NN, score it once on the test split, run the stability study, explain `cars`, and write the outputs |
+| `run` | Validate and split the data, build the tree (grid search) and prune it on the validation split, score it once on the test split, run the stability study, explain `cars`, and write the outputs |
 | `explain` | Rebuild the model from `model.json` and rate and explain the config's `cars` |
 | `show-config` | Print the resolved configuration with every default filled in |
 
@@ -151,7 +152,7 @@ timings, the scores as they are computed, and every warning and error.
 21:00:24 INFO    car_eval_core.pipeline: [2/7] building and pruning a tree on 6 raw attributes ...
 21:00:25 INFO    car_eval_core.tree: best CV macro-F1 0.888 +/- 0.055 with entropy, max_depth unlimited, ...
 21:00:25 INFO    car_eval_core.pipeline: [2/7] building and pruning a tree on 6 raw attributes done in 0.5 s
-21:00:35 INFO    car_eval_core.stability:   split 4/20 (seed 45): rev0 macro-F1 0.921, rev1 0.982
+21:00:35 INFO    car_eval_core.stability:   split 4/20 (seed 45): test macro-F1 0.982, 33 leaves
 21:01:18 ERROR   car_eval_io: cannot read model recipe outputs/model.json: No such file or directory. Run `car-eval run` first.
 ```
 
@@ -184,7 +185,7 @@ what each variant changes:
 | Profile | Use |
 | --- | --- |
 | `default` | The base settings: full grid, 3× repeated 5-fold CV, 20-split stability study, figures saved |
-| `quick` | Smoke run in well under a minute: small grid, one CV repeat, 3-split study, no figures |
+| `quick` | Smoke run in about 10 seconds: small grid, one CV repeat, 3-split study, no figures |
 | `colab` | Figures shown inline as well as saved (the notebook passes the Drive locations) |
 
 Select one with the `profile:` key at the top of the file. Nested sections merge key by key,
@@ -211,17 +212,17 @@ configuration or command-line arguments.
 | Tree building, then tree pruning (Lecture 3B) | `tune_tree`, then `prune_on_validation` |
 | Gini purity of the leaves | `CarEvaluator.purity` |
 | Unacceptable rated acceptable, and the reverse | `Scores.false_acceptance`, `Scores.false_rejection` |
-| k-NN fallback and adequacy check | `car_eval_core.benchmarks` |
 | Instability of trees | `car_eval_core.stability` |
 | Decision path with a rating and a confidence | `CarEvaluator.explain` |
 | Monitor and update with new labels | `CarEvaluator.with_new_labels` |
 
-Main finding: the labels come from an expert hierarchy (Bohanec & Rajkovič, 1988) in which buying +
-maint form *price* and doors + persons + lug_boot form *comfort*. Adding those two rank sums as
-features lets the tree split on the combinations directly. Across 20 random splits, test macro-F1
-rises from 0.930 ± 0.022 (rev0) to 0.979 ± 0.017, the tree needs about half as many leaves, and
-rev1 matches or beats rev0 on every split. Pruning and macro-F1 scoring alone do not change the tree,
-because the dataset has no label noise to prune away.
+Why the concept features: the labels come from an expert hierarchy (Bohanec & Rajkovič, 1988) in
+which buying + maint form *price* and doors + persons + lug_boot form *comfort*. Adding those two
+rank sums as inputs lets the tree split on the combinations directly. When an earlier version of
+this project compared the two (the comparison code was later removed; see the Git history), test
+macro-F1 across 20 random splits rose from 0.930 ± 0.022 for a tree on the six raw attributes to
+0.979 ± 0.017, and the tree needed about half as many leaves. Pruning and macro-F1 scoring alone did
+not change the tree, because the dataset has no label noise to prune away.
 
 ## Development
 

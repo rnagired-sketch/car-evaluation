@@ -19,6 +19,7 @@ from sklearn.tree import plot_tree
 from car_eval_core.diagnostics import Curve
 from car_eval_core.domain import CLASS_LABELS, Acceptability
 from car_eval_core.evaluator import CarEvaluator, Importances
+from car_eval_core.features import MODEL_COLUMNS
 from car_eval_core.pipeline import PipelineResult
 from car_eval_core.tree import PruningResult
 
@@ -140,7 +141,7 @@ def decision_tree(sink: FigureSink, evaluator: CarEvaluator) -> None:
         plot_tree(
             tree,
             ax=fig.subplots(),
-            feature_names=list(evaluator.spec.features.columns),
+            feature_names=list(MODEL_COLUMNS),
             class_names=[Acceptability(int(c)).label for c in tree.classes_],
             filled=True,
             rounded=True,
@@ -151,7 +152,7 @@ def decision_tree(sink: FigureSink, evaluator: CarEvaluator) -> None:
 def all_figures(sink: FigureSink, class_counts: pd.Series, result: PipelineResult) -> list[Path]:
     class_balance(sink, class_counts)
     depth_curve(sink, result.depth_curve)
-    pruning(sink, result.chosen.pruning)
+    pruning(sink, result.developed.pruning)
     learning_curve(sink, result.learning_curve)
     confusion(sink, result.confusion)
     importances(sink, result.importances)

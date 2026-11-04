@@ -7,8 +7,14 @@ import pytest
 from car_eval_core.dataset import COLUMN_NAMES, CarDataset, DataSplits, Partition
 from car_eval_core.domain import Acceptability, Car, CcpAlpha, Seed
 from car_eval_core.evaluator import CarEvaluator, Explanation
-from car_eval_core.features import CONCEPT_BY_NAME, FEATURE_NAMES, FeatureSet, LevelCondition, ScoreCondition
-from car_eval_core.tree import TreeHyperparameters, TreeSpec
+from car_eval_core.features import (
+    CONCEPT_BY_NAME,
+    FEATURE_NAMES,
+    MODEL_COLUMNS,
+    LevelCondition,
+    ScoreCondition,
+)
+from car_eval_core.tree import TreeSpec
 
 SEED = Seed(42)
 CHEAP_SAFE_ROOMY = Car("low", "low", "4", "4", "big", "high")
@@ -103,12 +109,6 @@ class TestExplain:
             ]
             assert len(names) == len(set(names))
 
-    def test_path_mentions_concepts_only_for_concept_models(self, splits: DataSplits) -> None:
-        raw = CarEvaluator.fit(
-            TreeSpec(FeatureSet.RAW, TreeHyperparameters("entropy", None, 2, 1, None)), splits.train, SEED
-        )
-        assert all(isinstance(c, LevelCondition) for c in raw.explain(CHEAP_SAFE_ROOMY).path)
-
     def test_low_safety_is_explained_by_safety_alone(self, evaluator: CarEvaluator) -> None:
         explanation = evaluator.explain(UNSAFE)
         assert explanation.rating is Acceptability.UNACC
@@ -159,7 +159,7 @@ class TestImportances:
         self, evaluator: CarEvaluator, splits: DataSplits
     ) -> None:
         importances = evaluator.importances(splits.test, repeats=2)
-        assert tuple(importances.impurity) == FeatureSet.WITH_CONCEPTS.columns
+        assert tuple(importances.impurity) == MODEL_COLUMNS
         assert sum(importances.impurity.values()) == pytest.approx(1.0)
 
     def test_permutation_covers_raw_attributes(self, evaluator: CarEvaluator, splits: DataSplits) -> None:

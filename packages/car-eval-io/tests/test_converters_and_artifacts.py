@@ -13,7 +13,6 @@ from car_eval_core.domain import Acceptability, Car, CcpAlpha, Seed
 from car_eval_core.features import (
     CONCEPT_BY_NAME,
     FEATURE_BY_NAME,
-    FeatureSet,
     LevelCondition,
     ScoreCondition,
 )
@@ -76,9 +75,7 @@ def recipe(rows: int = 1728, data: Path = Path("/data/car.data")) -> ModelRecipe
         rows=rows,
         seed=Seed(42),
         fractions=SplitFractions(),
-        spec=TreeSpec(
-            FeatureSet.WITH_CONCEPTS, TreeHyperparameters("entropy", None, 2, 1, None, CcpAlpha(0.001))
-        ),
+        spec=TreeSpec(TreeHyperparameters("entropy", None, 2, 1, None, CcpAlpha(0.001))),
     )
 
 
@@ -101,8 +98,8 @@ class TestRecipe:
 
     def test_file_is_human_readable(self, tmp_path: Path) -> None:
         data = json.loads(write_json(tmp_path / "model.json", recipe()).read_text())
-        assert data["spec"]["features"] == "with_concepts"
         assert data["data"]["kind"] == "local"
+        assert data["spec"]["params"]["criterion"] == "entropy"
         assert data["spec"]["params"]["max_depth"] is None
 
     def test_rebuild_reproduces_the_trained_model(
@@ -132,9 +129,9 @@ class TestRecipe:
     def test_schema_violations(self, tmp_path: Path) -> None:
         path = tmp_path / "model.json"
         data = json.loads(to_json(recipe()))
-        data["spec"]["features"] = "everything"
+        data["spec"]["params"]["criterion"] = "everything"
         path.write_text(json.dumps(data), encoding="utf-8")
-        with pytest.raises(ArtifactError, match=r"\$\.spec\.features"):
+        with pytest.raises(ArtifactError, match=r"\$\.spec\.params\.criterion"):
             load_recipe(path)
 
 

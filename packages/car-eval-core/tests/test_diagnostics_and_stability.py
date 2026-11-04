@@ -58,12 +58,7 @@ def study(dataset: CarDataset, concept_spec: TreeSpec) -> StabilityStudy:
 class TestStability:
     def test_one_entry_per_seed(self, study: StabilityStudy) -> None:
         assert study.seeds == (1, 2, 3)
-        for values in (
-            study.rev0_macro_f1,
-            study.rev1_macro_f1,
-            study.rev1_false_acceptance,
-            study.rev1_leaves,
-        ):
+        for values in (study.macro_f1, study.false_acceptance, study.leaves):
             assert values.shape == (3,)
         assert sum(study.root_features.values()) == 3
 
@@ -71,9 +66,9 @@ class TestStability:
         counts = list(study.root_features.values())
         assert counts == sorted(counts, reverse=True)
 
-    def test_rev1_wins_counts_ties(self, study: StabilityStudy) -> None:
-        assert study.rev1_wins == int((study.rev1_macro_f1 >= study.rev0_macro_f1).sum())
-        assert study.rev1_wins == 3  # the concept tree beats rev0 on every split tried
+    def test_scores_stay_high_on_every_split(self, study: StabilityStudy) -> None:
+        assert study.macro_f1.min() >= 0.9
+        assert (study.leaves > 1).all()
 
     def test_requires_seeds(self, dataset: CarDataset, concept_spec: TreeSpec) -> None:
         with pytest.raises(ValueError, match="at least one seed"):

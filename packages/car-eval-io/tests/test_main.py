@@ -32,8 +32,6 @@ CAR = "cars: [{buying: low, maint: low, doors: 4, persons: 4, lug_boot: big, saf
 FAST = """
 figures: {save: false}
 pipeline:
-  feature_sets: [with_concepts]
-  compare_benchmarks: false
   stability_seeds: 0
   permutation_repeats: 1
   cv: {n_splits: 3, n_repeats: 1}

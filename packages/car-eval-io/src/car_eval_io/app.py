@@ -63,7 +63,7 @@ def run(config: AppConfig, data: DataSource, paths: RunPaths, out: TextIO | None
         rows=len(dataset),
         seed=config.pipeline.seed,
         fractions=config.pipeline.fractions,
-        spec=result.chosen.spec,
+        spec=result.developed.spec,
     )
     files = [
         paths.report,
@@ -97,7 +97,7 @@ def explain(
     logger.info("car-eval explain: %d car(s), model from %s", len(config.cars), paths.model)
     recipe = load_recipe(paths.model)
     dataset, _ = load_dataset(data if data is not None else recipe.data)
-    logger.info("rebuilding the %s tree from the recipe", recipe.spec.features.description)
+    logger.info("rebuilding the tree from the recipe")
     evaluator = recipe.rebuild(dataset)
     explanations = tuple(evaluator.explain(car) for car in config.cars)
     for explanation in explanations:

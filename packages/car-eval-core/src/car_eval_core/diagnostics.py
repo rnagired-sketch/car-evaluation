@@ -14,6 +14,7 @@ from sklearn.model_selection import StratifiedKFold, learning_curve, validation_
 
 from car_eval_core.dataset import Partition
 from car_eval_core.domain import CLASS_CODES, CcpAlpha, Seed
+from car_eval_core.features import model_inputs
 from car_eval_core.metrics import CvSettings
 from car_eval_core.tree import TreeSpec
 
@@ -49,7 +50,7 @@ def depth_curve(
     x = np.asarray(depths)
     train_scores, cv_scores = validation_curve(
         unlimited.build(seed),
-        spec.features.transform(train.X),
+        model_inputs(train.X),
         train.y,
         param_name="max_depth",
         param_range=x,
@@ -68,7 +69,7 @@ def learning_curve_of(
         Arrays3,
         learning_curve(
             spec.params.build(seed),
-            spec.features.transform(data.X),
+            model_inputs(data.X),
             data.y,
             train_sizes=np.linspace(0.1, 1.0, points),
             scoring="f1_macro",

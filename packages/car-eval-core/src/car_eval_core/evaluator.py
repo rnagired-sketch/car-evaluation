@@ -15,7 +15,14 @@ from sklearn.tree import DecisionTreeClassifier
 
 from car_eval_core.dataset import CarDataset, Partition
 from car_eval_core.domain import Acceptability, Car, Seed
-from car_eval_core.features import FEATURE_NAMES, Condition, tighten
+from car_eval_core.features import (
+    FEATURE_NAMES,
+    MODEL_COLUMNS,
+    Condition,
+    model_inputs,
+    path_condition,
+    tighten,
+)
 from car_eval_core.metrics import Scores, gini
 from car_eval_core.tree import TreeSpec
 
@@ -57,7 +64,7 @@ class CarEvaluator:
         # Owned copy: later changes to the caller's frames cannot alter explanations.
         self.__training = Partition(training.X.copy(), training.y.copy())
         self.__seed = seed
-        self.__training_leaves = tree.apply(spec.features.transform(training.X))
+        self.__training_leaves = tree.apply(model_inputs(training.X))
 
     @staticmethod
     def fit(spec: TreeSpec, training: Partition, seed: Seed) -> CarEvaluator:
@@ -100,16 +107,15 @@ class CarEvaluator:
         )
 
     def explain(self, car: Car) -> Explanation:
-        x = self.__spec.features.transform(car.encoded())
-        columns = self.__spec.features.columns
+        x = model_inputs(car.encoded())
         structure = self.__tree.tree_
         conditions: dict[str, Condition] = {}
         for node in self.__tree.decision_path(x).indices:
             if structure.children_left[node] == structure.children_right[node]:  # leaf
                 continue
-            column = columns[structure.feature[node]]
+            column = MODEL_COLUMNS[structure.feature[node]]
             threshold = float(structure.threshold[node])
-            step = self.__spec.features.condition(column, threshold, bool(x[column].iloc[0] <= threshold))
+            step = path_condition(column, threshold, bool(x[column].iloc[0] <= threshold))
             conditions[column] = tighten(conditions[column], step) if column in conditions else step
 
         leaf = int(self.__tree.apply(x)[0])
@@ -131,9 +137,7 @@ class CarEvaluator:
         return CarEvaluator.fit(self.__spec, Partition(X[keep], y[keep]), self.__seed)
 
     def importances(self, data: Partition, repeats: int = 20) -> Importances:
-        impurity = dict(
-            zip(self.__spec.features.columns, map(float, self.__tree.feature_importances_), strict=False)
-        )
+        impurity = dict(zip(MODEL_COLUMNS, map(float, self.__tree.feature_importances_), strict=False))
         return Importances(impurity, self.permutation_importance(data, repeats))
 
     def permutation_importance(self, data: Partition, repeats: int = 20) -> dict[str, float]:

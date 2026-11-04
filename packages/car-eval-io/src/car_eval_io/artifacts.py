@@ -1,7 +1,7 @@
 """Files a run leaves behind: the model recipe and a machine-readable results summary.
 
 The trained tree is not pickled. `model.json` records how to rebuild it (data source,
-seed, split fractions, feature set, hyperparameters); refitting is deterministic and takes
+seed, split fractions, hyperparameters); refitting is deterministic and takes
 well under a second, and the recipe stays human-readable and safe to load.
 """
 
@@ -15,11 +15,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from car_eval_core.benchmarks import AdequacyTargets, ComparisonRow
 from car_eval_core.dataset import CarDataset, DataSplits, SplitFractions, ValidationReport
 from car_eval_core.domain import Acceptability, CcpAlpha, Seed
 from car_eval_core.evaluator import CarEvaluator, Explanation, Importances, TreePurity
-from car_eval_core.features import FeatureSet
 from car_eval_core.metrics import Scores
 from car_eval_core.pipeline import Misclassification, PipelineResult
 from car_eval_core.tree import TreeSpec
@@ -51,20 +49,12 @@ class ModelRecipe:
 
 
 @dataclass(frozen=True)
-class CandidateSummary:
-    features: FeatureSet
-    spec: TreeSpec
+class TreeSummary:
+    spec: TreeSpec  # the final, pruned specification
     cv_macro_f1_mean: float
     cv_macro_f1_std: float
     chosen_alpha: CcpAlpha
     validation: Scores
-
-
-@dataclass(frozen=True)
-class AdequacySummary:
-    passes: bool
-    validation: Scores
-    targets: AdequacyTargets
 
 
 @dataclass(frozen=True)
@@ -77,11 +67,9 @@ class SpreadSummary:
 @dataclass(frozen=True)
 class StabilitySummary:
     splits: int
-    rev0_macro_f1: SpreadSummary
-    rev1_macro_f1: SpreadSummary
-    rev1_wins: int
-    rev1_false_acceptance_mean: float
-    rev1_leaves_mean: float
+    macro_f1: SpreadSummary
+    false_acceptance_mean: float
+    leaves_mean: float
     root_features: Mapping[str, int]
 
 
@@ -89,10 +77,7 @@ class StabilitySummary:
 class RunSummary:
     validation_report: ValidationReport
     split_counts: Mapping[str, Mapping[Acceptability, int]]
-    candidates: tuple[CandidateSummary, ...]
-    chosen: TreeSpec
-    comparison: tuple[ComparisonRow, ...]
-    adequacy: AdequacySummary
+    tree: TreeSummary
     test_scores: Scores
     purity: TreePurity
     importances: Importances
@@ -113,30 +98,22 @@ def summarize(
         s = result.stability
         stability = StabilitySummary(
             splits=len(s.seeds),
-            rev0_macro_f1=_spread(s.rev0_macro_f1),
-            rev1_macro_f1=_spread(s.rev1_macro_f1),
-            rev1_wins=s.rev1_wins,
-            rev1_false_acceptance_mean=float(s.rev1_false_acceptance.mean()),
-            rev1_leaves_mean=float(s.rev1_leaves.mean()),
+            macro_f1=_spread(s.macro_f1),
+            false_acceptance_mean=float(s.false_acceptance.mean()),
+            leaves_mean=float(s.leaves.mean()),
             root_features=s.root_features,
         )
+    developed = result.developed
     return RunSummary(
         validation_report=report,
         split_counts=result.splits.class_counts(),
-        candidates=tuple(
-            CandidateSummary(
-                features,
-                d.spec,
-                d.search.cv_macro_f1_mean,
-                d.search.cv_macro_f1_std,
-                d.pruning.chosen_alpha,
-                d.validation,
-            )
-            for features, d in result.candidates.items()
+        tree=TreeSummary(
+            spec=developed.spec,
+            cv_macro_f1_mean=developed.search.cv_macro_f1_mean,
+            cv_macro_f1_std=developed.search.cv_macro_f1_std,
+            chosen_alpha=developed.pruning.chosen_alpha,
+            validation=developed.validation,
         ),
-        chosen=result.chosen.spec,
-        comparison=result.comparison,
-        adequacy=AdequacySummary(result.adequacy.passes, result.adequacy.validation, result.adequacy.targets),
         test_scores=result.test_scores,
         purity=result.purity,
         importances=result.importances,

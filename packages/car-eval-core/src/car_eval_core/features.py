@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import enum
 import math
 from dataclasses import dataclass
-from typing import Final, assert_never
+from typing import Final
 
 import pandas as pd
 
@@ -130,45 +129,19 @@ def tighten(old: Condition, new: Condition) -> Condition:
             raise TypeError(f"cannot combine {old!r} with {new!r}")
 
 
-class FeatureSet(enum.Enum):
-    """Which columns a model sees."""
+MODEL_COLUMNS: Final[tuple[str, ...]] = (*FEATURE_NAMES, *CONCEPT_BY_NAME)
+MODEL_INPUTS: Final = "6 raw attributes + price & comfort scores"
 
-    RAW = "raw"
-    WITH_CONCEPTS = "with_concepts"
 
-    @property
-    def description(self) -> str:
-        match self:
-            case FeatureSet.RAW:
-                return "6 raw attributes"
-            case FeatureSet.WITH_CONCEPTS:
-                return "6 raw attributes + price & comfort scores"
-            case _:
-                assert_never(self)
+def model_inputs(X: pd.DataFrame) -> pd.DataFrame:
+    """The tree's inputs: the encoded raw attributes plus the two concept scores."""
+    return X.assign(**{c.name: c.score(X) for c in CONCEPTS})
 
-    @property
-    def columns(self) -> tuple[str, ...]:
-        match self:
-            case FeatureSet.RAW:
-                return FEATURE_NAMES
-            case FeatureSet.WITH_CONCEPTS:
-                return (*FEATURE_NAMES, *CONCEPT_BY_NAME)
-            case _:
-                assert_never(self)
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Model inputs from encoded raw attributes."""
-        match self:
-            case FeatureSet.RAW:
-                return X
-            case FeatureSet.WITH_CONCEPTS:
-                return X.assign(**{c.name: c.score(X) for c in CONCEPTS})
-            case _:
-                assert_never(self)
-
-    def condition(self, column: str, threshold: float, goes_left: bool) -> Condition:
-        if column in FEATURE_BY_NAME:
-            return FEATURE_BY_NAME[column].condition(threshold, goes_left)
-        if column in CONCEPT_BY_NAME and self is FeatureSet.WITH_CONCEPTS:
-            return CONCEPT_BY_NAME[column].condition(threshold, goes_left)
-        raise KeyError(f"{column!r} is not a column of feature set {self.value!r}")
+def path_condition(column: str, threshold: float, goes_left: bool) -> Condition:
+    """The condition a CART split on `column` imposes on the side a car goes to."""
+    if column in FEATURE_BY_NAME:
+        return FEATURE_BY_NAME[column].condition(threshold, goes_left)
+    if column in CONCEPT_BY_NAME:
+        return CONCEPT_BY_NAME[column].condition(threshold, goes_left)
+    raise KeyError(f"{column!r} is not a model input; expected one of {MODEL_COLUMNS}")

@@ -7,7 +7,7 @@ import pytest
 
 from car_eval_core.dataset import DataSplits
 from car_eval_core.domain import CcpAlpha, Seed
-from car_eval_core.features import FeatureSet
+from car_eval_core.features import MODEL_COLUMNS
 from car_eval_core.metrics import CvSettings, Scores
 from car_eval_core.tree import (
     PruningResult,
@@ -86,13 +86,12 @@ class TestTreeSpec:
         pruned = concept_spec.with_alpha(CcpAlpha(0.02))
         assert pruned.params.ccp_alpha == 0.02
         assert concept_spec.params.ccp_alpha == 0.0
-        assert pruned.features is concept_spec.features
 
-    @pytest.mark.parametrize("features", list(FeatureSet))
-    def test_fit_uses_the_feature_set_columns(self, features: FeatureSet, splits: DataSplits) -> None:
-        spec = TreeSpec(features, TreeHyperparameters("gini", 3, 2, 1, None))
+    def test_fit_uses_the_model_input_columns(self, splits: DataSplits) -> None:
+        spec = TreeSpec(TreeHyperparameters("gini", 3, 2, 1, None))
         tree = spec.fit(splits.train, SEED)
-        assert tuple(tree.feature_names_in_)  # pyright: ignore[reportAttributeAccessIssue]  (set by fit) == features.columns
+        fitted_columns = tuple(tree.feature_names_in_)  # pyright: ignore[reportAttributeAccessIssue]  (set by fit)
+        assert fitted_columns == MODEL_COLUMNS
         assert spec.predict(tree, splits.test.X).shape == (len(splits.test),)
 
     def test_fit_is_deterministic(self, concept_spec: TreeSpec, splits: DataSplits) -> None:
@@ -105,13 +104,12 @@ class TestTuneTree:
     def test_best_comes_from_the_grid_and_leads_the_ranking(
         self, splits: DataSplits, small_grid: SearchGrid, fast_cv: CvSettings
     ) -> None:
-        result = tune_tree(FeatureSet.RAW, splits.train, small_grid, fast_cv, SEED, top=3)
+        result = tune_tree(splits.train, small_grid, fast_cv, SEED, top=3)
         params = result.spec.params
         assert params.criterion in small_grid.criterion
         assert params.max_depth in small_grid.max_depth
         assert params.min_samples_leaf in small_grid.min_samples_leaf
         assert params.ccp_alpha == 0.0
-        assert result.spec.features is FeatureSet.RAW
         assert len(result.top_candidates) == 3
         means = [c.macro_f1_mean for c in result.top_candidates]
         assert means == sorted(means, reverse=True)
@@ -121,7 +119,7 @@ class TestTuneTree:
     def test_scores_are_probabilities(
         self, splits: DataSplits, tiny_grid: SearchGrid, fast_cv: CvSettings
     ) -> None:
-        result = tune_tree(FeatureSet.RAW, splits.train, tiny_grid, fast_cv, SEED)
+        result = tune_tree(splits.train, tiny_grid, fast_cv, SEED)
         candidate = result.top_candidates[0]
         for value in (candidate.macro_f1_mean, candidate.balanced_accuracy_mean, candidate.accuracy_mean):
             assert 0.0 <= value <= 1.0
@@ -129,7 +127,7 @@ class TestTuneTree:
 
     def test_deep_unweighted_tree_beats_a_stump(self, splits: DataSplits, fast_cv: CvSettings) -> None:
         grid = SearchGrid(("gini",), (1, None), (2,), (1,), (None,))
-        result = tune_tree(FeatureSet.RAW, splits.train, grid, fast_cv, SEED)
+        result = tune_tree(splits.train, grid, fast_cv, SEED)
         assert result.spec.params.max_depth is None
 
 
@@ -179,17 +177,15 @@ class TestDevelopTree:
     def test_combines_both_phases(
         self, splits: DataSplits, tiny_grid: SearchGrid, fast_cv: CvSettings
     ) -> None:
-        developed = develop_tree(FeatureSet.WITH_CONCEPTS, splits, tiny_grid, fast_cv, SEED)
+        developed = develop_tree(splits, tiny_grid, fast_cv, SEED)
         assert developed.spec == developed.search.spec.with_alpha(developed.pruning.chosen_alpha)
         refit = developed.spec.fit(splits.train, SEED)
         expected = Scores.of(splits.validation.y, developed.spec.predict(refit, splits.validation.X))
         assert developed.validation == expected
 
-    def test_concept_features_outperform_raw_attributes(
+    def test_reaches_the_expected_validation_score(
         self, splits: DataSplits, tiny_grid: SearchGrid, fast_cv: CvSettings
     ) -> None:
-        # Regression guard for the main finding of rev1.
-        raw = develop_tree(FeatureSet.RAW, splits, tiny_grid, fast_cv, SEED)
-        concepts = develop_tree(FeatureSet.WITH_CONCEPTS, splits, tiny_grid, fast_cv, SEED)
-        assert concepts.validation.macro_f1 > raw.validation.macro_f1
-        assert concepts.validation.macro_f1 >= 0.97
+        # Regression guard: with the price and comfort scores the tree scored 0.996 here.
+        developed = develop_tree(splits, tiny_grid, fast_cv, SEED)
+        assert developed.validation.macro_f1 >= 0.97

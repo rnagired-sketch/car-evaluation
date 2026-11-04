@@ -9,11 +9,13 @@ from car_eval_core.features import (
     FEATURE_BY_NAME,
     FEATURE_NAMES,
     FEATURES,
+    MODEL_COLUMNS,
     ConceptFeature,
-    FeatureSet,
     LevelCondition,
     OrdinalFeature,
     ScoreCondition,
+    model_inputs,
+    path_condition,
     tighten,
 )
 
@@ -116,37 +118,27 @@ class TestConditions:
             tighten(ScoreCondition(PRICE, 0, 1), ScoreCondition(COMFORT, 0, 1))
 
 
-class TestFeatureSet:
-    def test_values_are_stable_config_names(self) -> None:
-        assert [f.value for f in FeatureSet] == ["raw", "with_concepts"]
+class TestModelInputs:
+    def test_columns_are_raw_attributes_then_concepts(self) -> None:
+        assert (*FEATURE_NAMES, "price", "comfort") == MODEL_COLUMNS
 
-    def test_columns(self) -> None:
-        assert FeatureSet.RAW.columns == FEATURE_NAMES
-        assert FeatureSet.WITH_CONCEPTS.columns == (*FEATURE_NAMES, "price", "comfort")
-
-    @pytest.mark.parametrize("features", list(FeatureSet))
-    def test_transform_produces_declared_columns_without_mutating_input(self, features: FeatureSet) -> None:
+    def test_adds_concept_scores_without_mutating_input(self) -> None:
         X = pd.DataFrame([[0, 1, 2, 1, 2, 0]], columns=list(FEATURE_NAMES))
         before = X.copy()
-        out = features.transform(X)
-        assert tuple(out.columns) == features.columns
+        out = model_inputs(X)
+        assert tuple(out.columns) == MODEL_COLUMNS
         pd.testing.assert_frame_equal(X, before)
 
     def test_concept_columns_hold_rank_sums(self) -> None:
         X = pd.DataFrame([[1, 2, 3, 1, 2, 0]], columns=list(FEATURE_NAMES))
-        out = FeatureSet.WITH_CONCEPTS.transform(X)
+        out = model_inputs(X)
         assert out.loc[0, "price"] == 3
         assert out.loc[0, "comfort"] == 6
 
-    def test_condition_dispatches_on_column(self) -> None:
-        assert isinstance(FeatureSet.WITH_CONCEPTS.condition("safety", 0.5, True), LevelCondition)
-        assert isinstance(FeatureSet.WITH_CONCEPTS.condition("price", 0.5, True), ScoreCondition)
+    def test_path_condition_dispatches_on_column(self) -> None:
+        assert isinstance(path_condition("safety", 0.5, True), LevelCondition)
+        assert isinstance(path_condition("price", 0.5, True), ScoreCondition)
 
-    def test_condition_rejects_columns_outside_the_set(self) -> None:
-        with pytest.raises(KeyError):
-            FeatureSet.RAW.condition("price", 0.5, True)
-        with pytest.raises(KeyError):
-            FeatureSet.WITH_CONCEPTS.condition("colour", 0.5, True)
-
-    def test_descriptions_are_distinct(self) -> None:
-        assert len({f.description for f in FeatureSet}) == len(FeatureSet)
+    def test_path_condition_rejects_unknown_columns(self) -> None:
+        with pytest.raises(KeyError, match="not a model input"):
+            path_condition("colour", 0.5, True)

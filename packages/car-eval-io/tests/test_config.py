@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from car_eval_core.domain import Car, Seed
-from car_eval_core.features import FeatureSet
 from car_eval_core.metrics import CvSettings
 from car_eval_core.pipeline import PipelineSettings
 from car_eval_io.config import ConfigError, FigureSettings, load_config, merge, parse_config
@@ -172,9 +171,10 @@ class TestStructure:
         assert config.pipeline.grid.max_depth == (4, None)
         assert config.pipeline.grid.class_weight == (None, "balanced")
 
-    def test_feature_sets_by_name(self) -> None:
-        config = parse_config("pipeline: {feature_sets: [with_concepts]}", HERE)
-        assert config.pipeline.feature_sets == (FeatureSet.WITH_CONCEPTS,)
+    @pytest.mark.parametrize("key", ["feature_sets", "compare_benchmarks", "adequacy"])
+    def test_removed_trade_study_settings_are_rejected(self, key: str) -> None:
+        (message,) = problems(f"pipeline: {{{key}: x}}")
+        assert message == f"unknown key(s): {key} @ $.pipeline"
 
     def test_numeric_yaml_levels_become_strings(self) -> None:
         config = parse_config(

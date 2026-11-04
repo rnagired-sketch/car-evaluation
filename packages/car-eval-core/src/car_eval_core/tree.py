@@ -15,7 +15,7 @@ from sklearn.tree import DecisionTreeClassifier
 
 from car_eval_core.dataset import DataSplits, Partition
 from car_eval_core.domain import CcpAlpha, Seed
-from car_eval_core.features import FeatureSet
+from car_eval_core.features import MODEL_INPUTS, model_inputs
 from car_eval_core.metrics import CvSettings, Scores
 
 logger = logging.getLogger(__name__)
@@ -82,19 +82,19 @@ class TreeHyperparameters:
 
 @dataclass(frozen=True)
 class TreeSpec:
-    """Everything needed to rebuild a tree: which inputs it sees and how it is grown."""
+    """Everything needed to rebuild the tree: how it is grown. Its inputs are always
+    `model_inputs` (the raw attributes plus the price and comfort scores)."""
 
-    features: FeatureSet
     params: TreeHyperparameters
 
     def with_alpha(self, alpha: CcpAlpha) -> TreeSpec:
         return dataclasses.replace(self, params=dataclasses.replace(self.params, ccp_alpha=alpha))
 
     def fit(self, data: Partition, seed: Seed) -> DecisionTreeClassifier:
-        return self.params.build(seed).fit(self.features.transform(data.X), data.y)
+        return self.params.build(seed).fit(model_inputs(data.X), data.y)
 
     def predict(self, tree: DecisionTreeClassifier, X: pd.DataFrame) -> np.ndarray:
-        return tree.predict(self.features.transform(X))
+        return tree.predict(model_inputs(X))
 
 
 @dataclass(frozen=True)
@@ -123,14 +123,12 @@ def _describe(params: TreeHyperparameters) -> str:
     )
 
 
-def tune_tree(
-    features: FeatureSet, train: Partition, grid: SearchGrid, cv: CvSettings, seed: Seed, top: int = 5
-) -> SearchResult:
+def tune_tree(train: Partition, grid: SearchGrid, cv: CvSettings, seed: Seed, top: int = 5) -> SearchResult:
     """Tree-building phase: pick hyperparameters by cross-validated macro-F1 on the training split."""
     folds = cv.n_splits * cv.n_repeats
     logger.info(
         "grid search on %s: %d candidates x %d folds = %d fits",
-        features.description,
+        MODEL_INPUTS,
         grid.size,
         folds,
         grid.size * folds,
@@ -142,7 +140,7 @@ def tune_tree(
         scoring={"macro_f1": "f1_macro", "balanced_accuracy": "balanced_accuracy", "accuracy": "accuracy"},
         refit="macro_f1",  # pyright: ignore[reportArgumentType]  (sklearn is unannotated; a scorer name is valid)
     )
-    search.fit(features.transform(train.X), train.y)
+    search.fit(model_inputs(train.X), train.y)
     results = pd.DataFrame(search.cv_results_).sort_values("rank_test_macro_f1")
     candidates = tuple(
         CandidateScore(
@@ -162,7 +160,7 @@ def tune_tree(
         _describe(best.params),
     )
     return SearchResult(
-        spec=TreeSpec(features, TreeHyperparameters.from_search(search.best_params_)),
+        spec=TreeSpec(TreeHyperparameters.from_search(search.best_params_)),
         cv_macro_f1_mean=best.macro_f1_mean,
         cv_macro_f1_std=best.macro_f1_std,
         top_candidates=candidates,
@@ -183,7 +181,7 @@ def prune_on_validation(spec: TreeSpec, splits: DataSplits, seed: Seed) -> Pruni
     Each alpha on the minimal cost-complexity path removes the branches whose impurity
     decrease does not pay for their extra leaves; larger alpha means a smaller tree.
     """
-    train_X = spec.features.transform(splits.train.X)
+    train_X = model_inputs(splits.train.X)
     path = spec.params.build(seed).cost_complexity_pruning_path(train_X, splits.train.y)
     alphas = np.unique(np.clip(path.ccp_alphas, 0.0, None))
     if alphas.size > 1:
@@ -220,10 +218,8 @@ class DevelopedTree:
     validation: Scores
 
 
-def develop_tree(
-    features: FeatureSet, splits: DataSplits, grid: SearchGrid, cv: CvSettings, seed: Seed
-) -> DevelopedTree:
-    search = tune_tree(features, splits.train, grid, cv, seed)
+def develop_tree(splits: DataSplits, grid: SearchGrid, cv: CvSettings, seed: Seed) -> DevelopedTree:
+    search = tune_tree(splits.train, grid, cv, seed)
     pruning = prune_on_validation(search.spec, splits, seed)
     spec = search.spec.with_alpha(pruning.chosen_alpha)
     validation = Scores.of(

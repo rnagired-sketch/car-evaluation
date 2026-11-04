@@ -52,7 +52,6 @@ ignore = [
 [tool.ruff.lint.flake8-bugbear]
 # Frozen value objects: safe to share as dataclass defaults.
 extend-immutable-calls = [
-    "car_eval_core.benchmarks.AdequacyTargets",
     "car_eval_core.dataset.SplitFractions",
     "car_eval_core.domain.CcpAlpha",
     "car_eval_core.metrics.CvSettings",
