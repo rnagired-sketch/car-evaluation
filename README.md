@@ -1,8 +1,10 @@
 # Car Evaluation: a robust decision tree (AME 505, Group 12)
 
 Classifies cars from the [UCI Car Evaluation dataset](https://archive.ics.uci.edu/dataset/19/car+evaluation)
-as `unacc`, `acc`, `good` or `vgood` with one decision tree, utilizing CART tree building,
-cost-complexity pruning, Gini purity and two expert-model concept features (*price* and *comfort*).
+as `unacc`, `acc`, `good` or `vgood` with one CART decision tree. The tree reads the six car
+attributes plus two concept scores, *price* and *comfort*, and is grown by grid search, pruned by
+cost complexity and checked for Gini purity. On the held-out test split it rates 518 of 519 cars
+correctly (macro-F1 0.999); see [The model](#the-model).
 
 ## Repository layout
 
@@ -138,7 +140,6 @@ Outputs, written to the `--output` folder:
 - `results.json`: every metric, in machine-readable form.
 - `model.json`: a readable recipe that rebuilds the trained tree deterministically.
 - `figures/*.png`: class balance, depth curve, pruning path, learning curve, confusion matrix, feature importance, and the tree.
-
 - `car-eval.log`: every progress and error message, appended by each `run` and `explain`.
 
 Open them from the VS Code Explorer. `outputs/` is ignored by Git.
@@ -149,10 +150,10 @@ While a command runs, it logs what it is doing to the terminal: numbered stages 
 timings, the scores as they are computed, and every warning and error.
 
 ```
-21:00:24 INFO    car_eval_core.pipeline: [2/7] building and pruning a tree on 6 raw attributes ...
-21:00:25 INFO    car_eval_core.tree: best CV macro-F1 0.888 +/- 0.055 with entropy, max_depth unlimited, ...
-21:00:25 INFO    car_eval_core.pipeline: [2/7] building and pruning a tree on 6 raw attributes done in 0.5 s
-21:00:35 INFO    car_eval_core.stability:   split 4/20 (seed 45): test macro-F1 0.982, 33 leaves
+20:01:56 INFO    car_eval_core.pipeline: [2/5] building and pruning the tree on 6 raw attributes + price & comfort scores ...
+20:02:20 INFO    car_eval_core.tree: best CV macro-F1 0.962 +/- 0.044 with entropy, max_depth 12, ...
+20:02:21 INFO    car_eval_core.pipeline: [2/5] building and pruning the tree on 6 raw attributes + price & comfort scores done in 24.4 s
+20:02:26 INFO    car_eval_core.stability:   split 4/20 (seed 45): test macro-F1 0.985, 33 leaves
 21:01:18 ERROR   car_eval_io: cannot read model recipe outputs/model.json: No such file or directory. Run `car-eval run` first.
 ```
 
@@ -202,11 +203,91 @@ Exit codes: `0` success, `1` runtime failure (for example, no `model.json` yet),
 interrupted with `Ctrl+C`, `2` invalid
 configuration or command-line arguments.
 
-## Method and findings
+## The model
+
+One CART decision tree rates each car. With the default configuration (seed 42) it scores
+macro-F1 0.999 on the untouched test split, and 0.979 ± 0.017 across 20 random re-splits of the data.
+
+### Inputs
+
+Each attribute is encoded as its rank, lowest level first. Two concept scores are added from the
+expert model the labels came from (Bohanec & Rajkovič, 1988), where buying price and maintenance
+cost form PRICE, and doors, seats and boot size form COMFORT. With them the tree can split on those
+combinations directly instead of rebuilding them from many single-attribute splits.
+
+| Input | Levels | Encoded as |
+| --- | --- | --- |
+| `buying`, `maint` | low, med, high, vhigh | 0–3 |
+| `doors` | 2, 3, 4, 5more | 0–3 |
+| `persons` | 2, 4, more | 0–2 |
+| `lug_boot` | small, med, big | 0–2 |
+| `safety` | low, med, high | 0–2 |
+| `price` | buying + maint | 0–6 (0 = cheapest) |
+| `comfort` | doors + persons + lug_boot | 0–7 (0 = least roomy) |
+
+### How it is trained
+
+1. Validate, clean and encode the 1728 rows (none are dropped from the UCI file).
+2. Split them 50 / 20 / 30 into training (863), validation (346) and test (519) cars, stratified
+   so each split keeps the class mix (70% `unacc`, 22% `acc`, 4% `good`, 4% `vgood`).
+3. **Build:** grid-search 120 hyperparameter combinations (criterion, maximum depth, minimum
+   samples per split and per leaf, class weighting) with 3× repeated 5-fold cross-validation on the
+   training cars. Candidates are ranked by macro-F1, so the rare `good` and `vgood` classes count
+   as much as `unacc`.
+4. **Prune:** score every tree on the minimal cost-complexity pruning path on the validation cars
+   and keep the smallest one with the best validation macro-F1.
+5. **Test:** fit that tree on the training cars and score it once on the test cars.
+
+### The trained tree
+
+| Setting | Value |
+| --- | --- |
+| Split criterion | entropy |
+| Maximum depth allowed / reached | 12 / 11 |
+| Minimum samples per split / per leaf | 2 / 1 |
+| Class weighting | none |
+| Pruning strength (`ccp_alpha`) | 0: pruning removes no branch, because every leaf is already pure |
+| Leaves | 35 |
+| Cross-validated macro-F1 (training) | 0.962 ± 0.044 |
+| Validation macro-F1 | 0.996 |
+
+Gini impurity falls from 0.456 at the root to 0.000 averaged over the leaves. The root split is
+on `safety`: cars with low safety are always unacceptable.
+
+### Results on the test split
+
+| Class | Precision | Recall | F1 | Cars |
+| --- | --- | --- | --- | --- |
+| `unacc` | 0.997 | 1.000 | 0.999 | 363 |
+| `acc` | 1.000 | 0.991 | 0.996 | 115 |
+| `good` | 1.000 | 1.000 | 1.000 | 21 |
+| `vgood` | 1.000 | 1.000 | 1.000 | 20 |
+
+Accuracy is 0.998 and macro-F1 0.999. No unacceptable car is rated acceptable (false acceptance
+0.000), and 1 of 156 acceptable cars is rated unacceptable (false rejection 0.006). No rating is
+off by two or more classes. The one error is `buying=med, maint=med, doors=5more, persons=4,
+lug_boot=small, safety=med`: truly `acc`, rated `unacc` with confidence 0.81 from a leaf of 12
+unacceptable training cars.
+
+Shuffling one attribute on the test cars lowers macro-F1 by 0.470 for `safety`, 0.419 for
+`buying`, 0.342 for `maint`, 0.322 for `persons`, 0.262 for `lug_boot` and 0.121 for `doors`.
+
+### Stability
+
+Decision trees can change shape when the training data changes slightly (Lecture 3B). Refitting
+the same settings on 20 random 50 / 20 / 30 splits gives test macro-F1 0.979 ± 0.017 (lowest
+0.951), a false-acceptance rate of 0.004 on average, 33 ± 2 leaves, and a root split on `safety`
+14 times and on `persons` 6 times.
+
+These numbers come from `uv run car-eval run --config configs/config.yaml --data data/car.data`;
+the run is deterministic, so it reproduces them.
+
+### Where each step lives in the code
 
 | Proposal / lecture item | Where |
 | --- | --- |
 | Validate, clean and encode the attributes | `car_eval_core.dataset.CarDataset.from_frame` |
+| Price and comfort concept scores | `car_eval_core.features.model_inputs` |
 | 50 / 20 / 30 stratified split | `DataSplits.stratified` |
 | Class imbalance: macro-F1 model selection, class weighting in the search | `car_eval_core.tree.tune_tree` |
 | Tree building, then tree pruning (Lecture 3B) | `tune_tree`, then `prune_on_validation` |
@@ -215,14 +296,6 @@ configuration or command-line arguments.
 | Instability of trees | `car_eval_core.stability` |
 | Decision path with a rating and a confidence | `CarEvaluator.explain` |
 | Monitor and update with new labels | `CarEvaluator.with_new_labels` |
-
-Why the concept features: the labels come from an expert hierarchy (Bohanec & Rajkovič, 1988) in
-which buying + maint form *price* and doors + persons + lug_boot form *comfort*. Adding those two
-rank sums as inputs lets the tree split on the combinations directly. When an earlier version of
-this project compared the two (the comparison code was later removed; see the Git history), test
-macro-F1 across 20 random splits rose from 0.930 ± 0.022 for a tree on the six raw attributes to
-0.979 ± 0.017, and the tree needed about half as many leaves. Pruning and macro-F1 scoring alone did
-not change the tree, because the dataset has no label noise to prune away.
 
 ## Development
 
