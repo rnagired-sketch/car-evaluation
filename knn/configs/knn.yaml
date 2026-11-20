@@ -1,0 +1,66 @@
+# Configuration of the k-nearest-neighbor (k-NN) application. Every modelling input lives here;
+# where the data comes from and where results go are command-line options. Run from knn/:
+#
+#   uv run knn-eval run         --config configs/knn.yaml --data ../data/car.data --output outputs
+#   uv run knn-eval explain     --config configs/knn.yaml --output outputs
+#   uv run knn-eval show-config --config configs/knn.yaml   # print the resolved settings
+#
+# The seed and split fractions match the decision tree's config, so both models are trained and
+# tested on exactly the same cars. To run a variant, set `profile` to a name under `profiles`.
+
+profile: default            # default | quick | colab
+
+figures:
+  save: true                # write PNGs to <output>/figures
+  show: false               # display inline (notebooks)
+
+logging:                    # progress and errors, on the terminal (standard error)
+  level: info               # debug | info | warning | error
+  save: true                # also append them to <output>/knn-eval.log
+
+pipeline:
+  seed: 42                  # same as the decision tree
+  fractions:                # same 50 / 20 / 30 split as the decision tree
+    train: 0.5
+    validation: 0.2
+    test: 0.3
+  inputs: with_concepts     # raw | with_concepts (the tree's inputs: + price & comfort scores)
+  grid:                     # Lecture 3B: distance metric, K, voting rule and feature scaling
+    k: [1, 3, 5, 7, 9, 11, 15, 21]
+    metric: [euclidean, manhattan, minkowski, hamming, cosine]
+    voting: [majority, inverse_distance, inverse_square]   # 1/d and the lecture's 1/d^2 weights
+    scaling: [standard]     # standard | minmax | none
+    minkowski_p: 3          # p for the minkowski metric (p = 1 manhattan, p = 2 euclidean)
+  cv:                       # repeated stratified k-fold on the training split
+    n_splits: 5
+    n_repeats: 3
+  stability_seeds: 20       # re-split this many times (the tree's seeds); 0 skips the study
+  permutation_repeats: 20
+
+# Cars to rate and explain (doors: 2 | 3 | 4 | 5more, persons: 2 | 4 | more).
+cars:
+  - {buying: low,   maint: low,   doors: 4,     persons: 4,    lug_boot: big,   safety: high}  # cheap, roomy, safe
+  - {buying: vhigh, maint: vhigh, doors: 4,     persons: more, lug_boot: big,   safety: high}  # safe but very expensive
+  - {buying: low,   maint: low,   doors: 4,     persons: 2,    lug_boot: big,   safety: high}  # only two seats
+  - {buying: med,   maint: med,   doors: 2,     persons: 4,    lug_boot: small, safety: med}   # average, small boot
+  - {buying: low,   maint: med,   doors: 5more, persons: more, lug_boot: med,   safety: low}   # unsafe
+
+profiles:
+  # `default` needs no entry: it is the base settings above, unchanged.
+
+  quick:                    # fast smoke run, a few seconds
+    figures:
+      save: false
+    pipeline:
+      grid:
+        k: [5, 7]
+        metric: [euclidean, cosine]
+        voting: [inverse_distance]
+      cv:
+        n_repeats: 1
+      stability_seeds: 3
+      permutation_repeats: 5
+
+  colab:                    # notebooks: figures shown inline as well as saved
+    figures:
+      show: true

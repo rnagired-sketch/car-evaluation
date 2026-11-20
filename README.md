@@ -23,7 +23,8 @@ car-evaluation/
 │   └── car-eval-io/          application layer: YAML/JSON parsing, cattrs object construction,
 │       ├── src/car_eval_io/  reports, plots and the argparse CLI (__main__.py)
 │       └── tests/
-└── .github/workflows/ci.yml  lint, type-check and test on Python 3.11 to 3.13
+├── knn/                      separate k-NN application for comparison (own workspace and config)
+└── .github/workflows/ci.yml  lint, type-check and test both apps on Python 3.11 to 3.13
 ```
 
 The dependency only points one way: `car-eval-io` depends on `car-eval-core`.
@@ -296,6 +297,14 @@ the run is deterministic, so it reproduces them.
 | Instability of trees | `car_eval_core.stability` |
 | Decision path with a rating and a confidence | `CarEvaluator.explain` |
 | Monitor and update with new labels | `CarEvaluator.with_new_labels` |
+
+## k-NN comparison model
+
+[`knn/`](knn/README.md) holds a separate k-nearest-neighbor application for comparison with this
+tree. It mirrors this folder structure but has its own workspace, lockfile, config
+(`knn/configs/knn.yaml`) and command (`knn-eval`), and the two apps never import each other. It
+uses the same data, seed, split and scores. See [knn/README.md](knn/README.md) to run it and for
+the side-by-side results.
 
 ## Development
 

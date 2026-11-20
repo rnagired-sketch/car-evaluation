@@ -1,0 +1,18 @@
+[project]
+name = "knn-eval-core"
+version = "0.1.0"
+description = "Backend logic for the k-NN model: distance metrics, K, voting, scaling, search, evaluation"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "scikit-learn>=1.4",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/knn_eval_core"]
